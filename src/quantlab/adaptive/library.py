@@ -1,0 +1,100 @@
+"""Seed adaptive models. Static baselines come first."""
+
+from __future__ import annotations
+
+from quantlab.adaptive.definition import (
+    AdaptationPolicy,
+    AdaptiveModelDefinition,
+    LearnerKind,
+)
+
+
+def seed_adaptive_models() -> list[AdaptiveModelDefinition]:
+    return [
+        AdaptiveModelDefinition(
+            adaptive_model_id="static_mom20",
+            version="1",
+            name="No-adaptation rank momentum 20",
+            policy=AdaptationPolicy.NO_ADAPTATION,
+            learner=LearnerKind.STATIC,
+            alpha_ids=["rank_momentum_20"],
+            notes="Prompt 06 alpha as-is. Not an online learner.",
+        ),
+        AdaptiveModelDefinition(
+            adaptive_model_id="rolling_ic_mom20",
+            version="1",
+            name="Rolling-IC stale gate on rank momentum 20",
+            policy=AdaptationPolicy.ROLLING_REFIT,
+            learner=LearnerKind.ROLLING_IC,
+            alpha_ids=["rank_momentum_20"],
+            window=20,
+            min_obs=8,
+            notes="Emits the alpha only while trailing PIT IC is positive. Does not flip sign.",
+        ),
+        AdaptiveModelDefinition(
+            adaptive_model_id="expanding_ic_mom20",
+            version="1",
+            name="Expanding-IC stale gate on rank momentum 20",
+            policy=AdaptationPolicy.EXPANDING_REFIT,
+            learner=LearnerKind.EXPANDING_IC,
+            alpha_ids=["rank_momentum_20"],
+            min_obs=8,
+        ),
+        AdaptiveModelDefinition(
+            adaptive_model_id="ewma_ic_mom20",
+            version="1",
+            name="EWMA-IC stale gate on rank momentum 20",
+            policy=AdaptationPolicy.EWMA_UPDATE,
+            learner=LearnerKind.EWMA_IC,
+            alpha_ids=["rank_momentum_20"],
+            half_life=10.0,
+            min_obs=8,
+            notes="weight(age)=λ^age, λ=exp(-ln2/half_life), age in sessions, newest age=0.",
+        ),
+        AdaptiveModelDefinition(
+            adaptive_model_id="bayes_hit_mom20",
+            version="1",
+            name="Beta-Bernoulli P(IC>0) gate on rank momentum 20",
+            policy=AdaptationPolicy.EXPANDING_REFIT,
+            learner=LearnerKind.BAYESIAN_HIT,
+            alpha_ids=["rank_momentum_20"],
+            min_obs=8,
+            notes="Beta(1,1) prior. Posterior is not certainty and not a live order.",
+        ),
+        AdaptiveModelDefinition(
+            adaptive_model_id="ensemble_ic_mom",
+            version="1",
+            name="PIT IC-weighted mom5 + mom20",
+            policy=AdaptationPolicy.ENSEMBLE_ADAPTATION,
+            learner=LearnerKind.IC_WEIGHTED_ENSEMBLE,
+            alpha_ids=["rank_momentum_5", "rank_momentum_20"],
+            window=20,
+            min_obs=8,
+            min_alpha_weight=0.1,
+            max_alpha_weight=0.9,
+            max_concentration=0.85,
+            min_active_alphas=2,
+            notes="Weights from max(mean IC, 0) through T-1. Fallback equal weight is explicit.",
+        ),
+        AdaptiveModelDefinition(
+            adaptive_model_id="regime_vol_mom20",
+            version="1",
+            name="Vol-tercile-conditioned stale gate",
+            policy=AdaptationPolicy.REGIME_CONDITIONAL,
+            learner=LearnerKind.EXPANDING_IC,
+            alpha_ids=["rank_momentum_20"],
+            regime_model_id="vol_tercile",
+            min_obs=8,
+            notes="Uses rule-based vol_tercile (PIT). Smoothed HMM labels are blocked.",
+        ),
+        AdaptiveModelDefinition(
+            adaptive_model_id="drift_reset_mom20",
+            version="1",
+            name="CUSUM-triggered IC-history reset",
+            policy=AdaptationPolicy.DRIFT_TRIGGERED_REFIT,
+            learner=LearnerKind.EXPANDING_IC,
+            alpha_ids=["rank_momentum_20"],
+            min_obs=8,
+            notes="Reset is a research event. It does not peek at future labels.",
+        ),
+    ]

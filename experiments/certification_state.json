@@ -1,0 +1,281 @@
+{
+  "last": "CERT-262181e3bdb7",
+  "results": [
+    {
+      "run": {
+        "certification_id": "CERT-262181e3bdb7",
+        "candidate_id": "seed-candidate",
+        "state": "validation_passed",
+        "role": "validator",
+        "as_of": "2024-01-15T00:00:00Z",
+        "checklist_hash": "28d9a2d1076aa65a",
+        "evidence_hash": "cd712d626e915d92",
+        "snapshot_hash": "synthetic-diagnostic",
+        "spec_hash": "262181e3bdb777d3",
+        "validation_hash": "39e1b7a048bfecac",
+        "live_trading": false,
+        "note": "Certification is governance, not broker permission."
+      },
+      "candidate": {
+        "candidate_id": "seed-candidate",
+        "strategy_id": "",
+        "model_id": "",
+        "alpha_id": "",
+        "ensemble_id": "",
+        "portfolio_policy_id": "",
+        "capital_policy_id": "",
+        "risk_policy_id": "",
+        "paper_oms_policy_id": "",
+        "snapshot_id": "synthetic-diagnostic",
+        "feature_versions": {
+          "seed": "diagnostic"
+        },
+        "regime_definition": "",
+        "tca_policy_id": "",
+        "econometric_spec_id": "",
+        "family_id": "cert-family",
+        "knowledge_snapshot": "",
+        "software_version": "3.1.0",
+        "config_hash": "",
+        "data_kind": "synthetic",
+        "claims_production_evidence": false,
+        "note": "RESEARCH RESULT \u2260 VALIDATED MODEL \u2260 APPROVED STRATEGY \u2260 DEPLOYABLE STRATEGY \u2260 LIVE ORDER AUTHORITY."
+      },
+      "state": "validation_passed",
+      "checklist": [
+        {
+          "code": "data_pit",
+          "status": "pass",
+          "evidence_id": "integrity",
+          "note": "PIT leak flags must stay false. This is not a licensed NSE PIT claim.",
+          "waiver": null,
+          "critical": true
+        },
+        {
+          "code": "data_provenance",
+          "status": "warn",
+          "evidence_id": "synthetic-diagnostic",
+          "note": "Synthetic diagnostics are not production market evidence.",
+          "waiver": null,
+          "critical": false
+        },
+        {
+          "code": "data_corporate_actions",
+          "status": "not_tested",
+          "evidence_id": "",
+          "note": "Missing evidence is NOT_TESTED, not PASS.",
+          "waiver": null,
+          "critical": false
+        },
+        {
+          "code": "survivorship",
+          "status": "not_tested",
+          "evidence_id": "",
+          "note": "Missing evidence is NOT_TESTED, not PASS.",
+          "waiver": null,
+          "critical": false
+        },
+        {
+          "code": "research_lineage",
+          "status": "pass",
+          "evidence_id": "cert-family",
+          "note": "Candidate identity recorded. Knowledge is memory, not authority.",
+          "waiver": null,
+          "critical": false
+        },
+        {
+          "code": "multiple_testing",
+          "status": "not_tested",
+          "evidence_id": "",
+          "note": "Missing evidence is NOT_TESTED, not PASS.",
+          "waiver": null,
+          "critical": false
+        },
+        {
+          "code": "oos_validation",
+          "status": "not_tested",
+          "evidence_id": "",
+          "note": "Missing evidence is NOT_TESTED, not PASS.",
+          "waiver": null,
+          "critical": false
+        },
+        {
+          "code": "statistical_validation",
+          "status": "not_tested",
+          "evidence_id": "",
+          "note": "Missing evidence is NOT_TESTED, not PASS.",
+          "waiver": null,
+          "critical": false
+        },
+        {
+          "code": "regime_stability",
+          "status": "not_tested",
+          "evidence_id": "",
+          "note": "Missing evidence is NOT_TESTED, not PASS.",
+          "waiver": null,
+          "critical": false
+        },
+        {
+          "code": "execution_validation",
+          "status": "not_tested",
+          "evidence_id": "",
+          "note": "Missing evidence is NOT_TESTED, not PASS.",
+          "waiver": null,
+          "critical": false
+        },
+        {
+          "code": "tca",
+          "status": "not_tested",
+          "evidence_id": "",
+          "note": "Missing evidence is NOT_TESTED, not PASS.",
+          "waiver": null,
+          "critical": false
+        },
+        {
+          "code": "capacity",
+          "status": "not_tested",
+          "evidence_id": "",
+          "note": "Missing evidence is NOT_TESTED, not PASS.",
+          "waiver": null,
+          "critical": false
+        },
+        {
+          "code": "risk",
+          "status": "not_tested",
+          "evidence_id": "",
+          "note": "Missing evidence is NOT_TESTED, not PASS.",
+          "waiver": null,
+          "critical": false
+        },
+        {
+          "code": "capital",
+          "status": "not_tested",
+          "evidence_id": "",
+          "note": "Missing evidence is NOT_TESTED, not PASS.",
+          "waiver": null,
+          "critical": false
+        },
+        {
+          "code": "paper_reconciliation",
+          "status": "not_tested",
+          "evidence_id": "",
+          "note": "Missing evidence is NOT_TESTED, not PASS.",
+          "waiver": null,
+          "critical": true
+        },
+        {
+          "code": "monitoring",
+          "status": "not_tested",
+          "evidence_id": "",
+          "note": "Missing evidence is NOT_TESTED, not PASS.",
+          "waiver": null,
+          "critical": false
+        },
+        {
+          "code": "operational_readiness",
+          "status": "warn",
+          "evidence_id": "health",
+          "note": "Local research operations. Not a production SRE sign-off.",
+          "waiver": null,
+          "critical": false
+        },
+        {
+          "code": "safety",
+          "status": "pass",
+          "evidence_id": "live-safety-gates",
+          "note": "LIVE_TRADING remains false. Safety is not a broker check.",
+          "waiver": null,
+          "critical": true
+        },
+        {
+          "code": "ai_governance",
+          "status": "pass",
+          "evidence_id": "ai-governance",
+          "note": "AI cannot override certification, risk, safety, gates, or capital.",
+          "waiver": null,
+          "critical": true
+        }
+      ],
+      "risks": [
+        {
+          "category": "conceptual",
+          "severity": "not_assessed",
+          "note": "Not assessed. Absence of a score is not LOW."
+        },
+        {
+          "category": "data",
+          "severity": "medium",
+          "note": "Synthetic research diagnostic. Not NSE evidence."
+        },
+        {
+          "category": "implementation",
+          "severity": "not_assessed",
+          "note": "Not assessed. Absence of a score is not LOW."
+        },
+        {
+          "category": "parameter",
+          "severity": "not_assessed",
+          "note": "Not assessed. Absence of a score is not LOW."
+        },
+        {
+          "category": "estimation",
+          "severity": "not_assessed",
+          "note": "Not assessed. Absence of a score is not LOW."
+        },
+        {
+          "category": "overfitting",
+          "severity": "high",
+          "note": "OOS absence keeps overfitting risk visible."
+        },
+        {
+          "category": "regime",
+          "severity": "not_assessed",
+          "note": "Not assessed. Absence of a score is not LOW."
+        },
+        {
+          "category": "liquidity",
+          "severity": "not_assessed",
+          "note": "Not assessed. Absence of a score is not LOW."
+        },
+        {
+          "category": "execution",
+          "severity": "high",
+          "note": "Missing TCA is not a free execution assumption."
+        },
+        {
+          "category": "operational",
+          "severity": "high",
+          "note": "Paper reconciliation not evidenced."
+        },
+        {
+          "category": "software",
+          "severity": "not_assessed",
+          "note": "Not assessed. Absence of a score is not LOW."
+        },
+        {
+          "category": "dependency",
+          "severity": "not_assessed",
+          "note": "Not assessed. Absence of a score is not LOW."
+        },
+        {
+          "category": "monitoring",
+          "severity": "not_assessed",
+          "note": "Not assessed. Absence of a score is not LOW."
+        },
+        {
+          "category": "governance",
+          "severity": "low",
+          "note": "AI cannot certify, override gates, or request live orders."
+        }
+      ],
+      "waivers": [],
+      "reproduction": null,
+      "blocked": false,
+      "block_reasons": [
+        "critical_not_tested:paper_reconciliation"
+      ],
+      "live_trading": false,
+      "note": "RESEARCH RESULT \u2260 VALIDATED MODEL \u2260 APPROVED STRATEGY \u2260 DEPLOYABLE STRATEGY \u2260 LIVE ORDER AUTHORITY."
+    }
+  ]
+}

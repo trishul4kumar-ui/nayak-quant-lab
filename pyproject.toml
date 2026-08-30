@@ -1,0 +1,99 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "nayak-quant-lab"
+version = "3.1.0"
+description = "NAYAK QUANT LAB — private local-first quantitative research and trading laboratory"
+readme = "README.md"
+requires-python = ">=3.12"
+license = { text = "Proprietary" }
+authors = [{ name = "NAYAK QUANT LAB" }]
+dependencies = [
+    "pydantic>=2.10",
+    "pydantic-settings>=2.7",
+    "numpy>=2.0",
+    "pandas>=2.2",
+    "structlog>=24.4",
+    "PySide6>=6.7",
+    "pyarrow>=17.0",
+    "duckdb>=1.1",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.3",
+    "pytest-cov>=6.0",
+    "ruff>=0.8",
+    "mypy>=1.13",
+    "pandas-stubs>=2.2",
+]
+
+[project.scripts]
+quantlab = "quantlab.cli:main"
+quantlab-desktop = "quantlab.ui.main:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/quantlab"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+addopts = "-q --strict-markers"
+markers = [
+    "vertical_slice: first end-to-end research-to-backtest path",
+    "desktop: desktop application smoke tests",
+    "validation: research-grade validation suite",
+    "feature: feature engine and quality diagnostics",
+    "alpha: alpha definitions, IC, and combinations",
+    "portfolio: cross-sectional portfolio construction",
+    "factor: factor engine, exposures, and PIT beta",
+    "regime: market-state snapshots, detectors, and transitions",
+    "adaptive: prequential learners, decay, and drift",
+    "learning: statistical models, walk-forward, and selection",
+    "ensemble: combination, meta-alpha, stacking, and diversity",
+    "execution_research: microstructure, fills, costs, capacity, and latency",
+    "orchestration: research control plane, hypotheses, families, and lineage",
+    "discovery: symbolic/genetic expression search, novelty, and discovery integrity",
+    "knowledge: knowledge graph, research memory, genealogy, evidence, and claims",
+    "capital: capital allocation, investment decisions, risk budgets, and target portfolios",
+    "paper_oms: paper OMS, order lifecycle, paper fills, accounting, and reconciliation",
+    "monitoring: portfolio monitoring, performance attribution, drift, and research feedback",
+    "market_data: production PIT data, security master, corporate actions, and quality",
+    "tca: transaction cost analysis, execution calibration, liquidity, and capacity",
+    "econometrics: stationarity, cointegration, VAR/VECM, Granger, breaks, panel, causal",
+    "certification: model risk, independent validation, and pre-live certification",
+    "shadow: production paper trading and shadow execution (not live, not a broker)",
+    "safety: live-trading safety gateway (not live, not a broker)",
+    "ops: production operational control plane (not live, not a broker)",
+    "release: live-trading certification, promotion, and release eligibility (not live)",
+    "broker_gateway: read-only broker/account reconciliation gateway (not live, not order routing)",
+    "realtime_data: observe-only real-time market-data gateway (not live, not a broker)",
+    "realtime_decision: real-time research-to-decision engine (not an OMS, not live)",
+    "digital_twin: deterministic shadow validation / replay digital twin (not live, not a broker)",
+]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+packages = ["quantlab"]
+mypy_path = "src"
+warn_unused_ignores = true
+disallow_untyped_defs = true
+
+[[tool.mypy.overrides]]
+module = "PySide6.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["duckdb", "pyarrow", "pyarrow.*"]
+ignore_missing_imports = true

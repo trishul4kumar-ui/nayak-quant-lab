@@ -1,0 +1,11 @@
+# Safety state machine
+
+```
+DISABLED → RESEARCH_ONLY → PAPER → SHADOW → ARMED → AUTHORIZED
+AUTHORIZED → RELEASE_BLOCKED | HALTED
+HALTED | EMERGENCY → RECOVERY_PENDING → RESEARCH_ONLY | PAPER | SHADOW
+```
+
+Illegal (typed `InvalidSafetyTransition`): `RESEARCH_ONLY → AUTHORIZED`, `PAPER → AUTHORIZED`, `HALTED → AUTHORIZED`, `EMERGENCY → AUTHORIZED`, `DISABLED → ARMED`.
+
+Emergency is reachable from any state. There is no automatic recovery to `AUTHORIZED`.

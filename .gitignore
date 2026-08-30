@@ -1,0 +1,51 @@
+# Secrets
+.env
+.env.local
+*.pem
+*.key
+secrets/
+credentials/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.eggs/
+dist/
+build/
+.venv/
+venv/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+*.cover
+
+# Research artifacts
+data/raw/
+data/processed/
+data/cache/
+experiments/runs/
+experiments/*.jsonl
+*.parquet
+!data/sample/**
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Accidental local DuckDB dumps (mis-resolved path objects)
+*.duckdb
+*.duckdb.wal
+<*
+
+# Local IDE / OS
+.DS_Store
+.cursor/
+.idea/
+.vscode/
+*.swp
+
+# Docker
+docker-compose.override.yml

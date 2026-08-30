@@ -1,0 +1,3 @@
+# Failure recovery
+
+Fatal ops states: `CONFIG_INVALID`, `SECRET_INVALID`, `DATA_CORRUPT`, `STATE_CORRUPT`, `DEPENDENCY_FAILED`, `CLOCK_INVALID`, `DISK_CRITICAL`, `AUDIT_FAILURE`, `RECONCILIATION_FAILURE`, `SAFETY_FAILURE`. They do not auto-return to `RUNNING`. Recovery is explicit.

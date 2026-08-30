@@ -1,0 +1,198 @@
+{
+  "last": "TCA-OMS-b3f2669456a5",
+  "results": [
+    {
+      "run": {
+        "tca_run_id": "TCA-OMS-b3f2669456a5",
+        "oms_run_id": "OMS-b3f2669456a5",
+        "kind": "observed_tca",
+        "arrival_policy": "arrival_snapshot",
+        "as_of": "2024-01-15T00:00:00Z",
+        "tca_hash": "8d0d5ac640f0dcf0",
+        "calibration_hash": "",
+        "live_trading": false,
+        "note": "Research TCA. Not a broker execution report."
+      },
+      "kind": "observed_tca",
+      "shortfall": {
+        "delay_cost": 0.0,
+        "trading_cost": 1779.0000000000327,
+        "spread_cost": 449.96,
+        "market_impact": 0.0,
+        "opportunity_cost": null,
+        "explicit_fees": 1799.84,
+        "total": 4028.800000000033,
+        "status": "pass",
+        "definition_version": "is-v1",
+        "note": "Opportunity cost is measurement after the fact. Taxes remain NOT_TESTED until sourced. Simulated, not broker TCA."
+      },
+      "spread_kind": "unavailable",
+      "costs": [
+        {
+          "name": "commission_bps",
+          "value": 10.0,
+          "status": "pass",
+          "provenance": "configured_research",
+          "note": "Indian tax legs unspecified remain NOT_TESTED."
+        },
+        {
+          "name": "exchange_fees_bps",
+          "value": 0.0,
+          "status": "not_tested",
+          "provenance": "configured_research",
+          "note": "Indian tax legs unspecified remain NOT_TESTED."
+        },
+        {
+          "name": "stt_bps",
+          "value": 0.0,
+          "status": "not_tested",
+          "provenance": "configured_research",
+          "note": "Indian tax legs unspecified remain NOT_TESTED."
+        },
+        {
+          "name": "stamp_duty_bps",
+          "value": 0.0,
+          "status": "not_tested",
+          "provenance": "configured_research",
+          "note": "Indian tax legs unspecified remain NOT_TESTED."
+        },
+        {
+          "name": "gst_bps",
+          "value": 0.0,
+          "status": "not_tested",
+          "provenance": "configured_research",
+          "note": "Indian tax legs unspecified remain NOT_TESTED."
+        },
+        {
+          "name": "sebi_bps",
+          "value": 0.0,
+          "status": "not_tested",
+          "provenance": "configured_research",
+          "note": "Indian tax legs unspecified remain NOT_TESTED."
+        }
+      ],
+      "liquidity": {
+        "volume": 10000000.0,
+        "participation": null,
+        "spread": null,
+        "status": "pass",
+        "note": "Synthetic snapshot volume. Not NSE ADV."
+      },
+      "calibration": null,
+      "capacity": {
+        "policy_id": "CAP-TCA-001",
+        "status": "breach",
+        "scenarios": [
+          {
+            "capital": 100000.0,
+            "participation": 9016.99,
+            "estimated_impact_bps": null,
+            "expected_cost": null,
+            "net_edge": null,
+            "turnover": 901699.0,
+            "unfilled": null,
+            "breach": true,
+            "note": "\u20b9 ladder is a diagnostic, not a claim."
+          },
+          {
+            "capital": 500000.0,
+            "participation": 45084.95,
+            "estimated_impact_bps": null,
+            "expected_cost": null,
+            "net_edge": null,
+            "turnover": 901699.0,
+            "unfilled": null,
+            "breach": true,
+            "note": "\u20b9 ladder is a diagnostic, not a claim."
+          },
+          {
+            "capital": 1000000.0,
+            "participation": 90169.9,
+            "estimated_impact_bps": null,
+            "expected_cost": null,
+            "net_edge": null,
+            "turnover": 901699.0,
+            "unfilled": null,
+            "breach": true,
+            "note": "\u20b9 ladder is a diagnostic, not a claim."
+          },
+          {
+            "capital": 2500000.0,
+            "participation": 225424.75,
+            "estimated_impact_bps": null,
+            "expected_cost": null,
+            "net_edge": null,
+            "turnover": 901699.0,
+            "unfilled": null,
+            "breach": true,
+            "note": "\u20b9 ladder is a diagnostic, not a claim."
+          },
+          {
+            "capital": 5000000.0,
+            "participation": 450849.5,
+            "estimated_impact_bps": null,
+            "expected_cost": null,
+            "net_edge": null,
+            "turnover": 901699.0,
+            "unfilled": null,
+            "breach": true,
+            "note": "\u20b9 ladder is a diagnostic, not a claim."
+          },
+          {
+            "capital": 10000000.0,
+            "participation": 901699.0,
+            "estimated_impact_bps": null,
+            "expected_cost": null,
+            "net_edge": null,
+            "turnover": 901699.0,
+            "unfilled": null,
+            "breach": true,
+            "note": "\u20b9 ladder is a diagnostic, not a claim."
+          },
+          {
+            "capital": 50000000.0,
+            "participation": 4508495.0,
+            "estimated_impact_bps": null,
+            "expected_cost": null,
+            "net_edge": null,
+            "turnover": 901699.0,
+            "unfilled": null,
+            "breach": true,
+            "note": "\u20b9 ladder is a diagnostic, not a claim."
+          },
+          {
+            "capital": 100000000.0,
+            "participation": 9016990.0,
+            "estimated_impact_bps": null,
+            "expected_cost": null,
+            "net_edge": null,
+            "turnover": 901699.0,
+            "unfilled": null,
+            "breach": true,
+            "note": "\u20b9 ladder is a diagnostic, not a claim."
+          }
+        ],
+        "max_feasible_capital": null,
+        "note": "Policy-defined capacity. Synthetic volume is not NSE ADV."
+      },
+      "fragility": {
+        "status": "economically_unviable",
+        "surface": {
+          "base_shortfall": 4028.800000000033,
+          "stressed_shortfall": 8057.600000000066,
+          "capacity_breaches": 8.0
+        },
+        "note": "Fragility is not a promotion decision. Prompt 05 remains the gate."
+      },
+      "paper_comparison": {
+        "target_notional": 900000.0,
+        "filled_notional": 901699.0,
+        "residual_notional": 0.0,
+        "paper_shortfall": 2678.920000000033,
+        "tca_shortfall": 4028.800000000033
+      },
+      "live_trading": false,
+      "note": "observed_tca. Paper fill is not broker-confirmed. Bid/ask history is NOT_TESTED. Official NSE ADV is NOT_TESTED."
+    }
+  ]
+}

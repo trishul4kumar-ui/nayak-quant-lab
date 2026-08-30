@@ -1,0 +1,271 @@
+{
+  "last": "MON-OMS-b3f2669456a5",
+  "results": [
+    {
+      "run": {
+        "monitoring_run_id": "MON-OMS-b3f2669456a5",
+        "decision_hash": "seed-decision",
+        "oms_run_id": "OMS-b3f2669456a5",
+        "snapshot_id": "seed",
+        "methodology_id": "accounting-v1",
+        "as_of": "2024-01-15T00:00:00Z",
+        "status": "complete",
+        "performance_hash": "fe7b2db0cce4231d",
+        "attribution_hash": "707e1d40a2d3f034",
+        "run_hash": "e39f99c5fdbf4b0e",
+        "live_trading": false,
+        "note": "Monitoring run. Not a second backtest. Not a live book."
+      },
+      "snapshot": {
+        "snapshot_id": "perf-OMS-b3f2669456a5",
+        "as_of": "2024-01-15T00:00:00Z",
+        "equity": {
+          "as_of": "2024-01-15T00:00:00Z",
+          "cash": 98301.0,
+          "reserved_cash": 0.0,
+          "market_value": 899920.0,
+          "equity": 998221.0,
+          "note": "Paper mark. Not a broker NAV."
+        },
+        "pnl": {
+          "beginning_equity": 1000000.0,
+          "ending_equity": 998221.0,
+          "cash": 98301.0,
+          "reserved_cash": 0.0,
+          "gross_exposure": 0.901523810859519,
+          "net_exposure": 0.901523810859519,
+          "long_exposure": 899920.0,
+          "short_exposure": null,
+          "realized_pnl": 0.0,
+          "unrealized_pnl": -1779.0000000000327,
+          "income": null,
+          "costs": 1529.864,
+          "fees": 1799.84,
+          "financing": null,
+          "adjustments": null,
+          "residual_pnl": 3.2741809263825417e-11,
+          "pnl_total": -1779.0,
+          "net_return": -0.001779,
+          "identity_ok": true,
+          "note": "Income, financing, and tax adjustments are NOT_TESTED. Fill costs are explanatory; they are already in cash via simulated execution prices and are not subtracted twice."
+        },
+        "snapshot_hash": "de0f2b094f7c80a2",
+        "note": "Synthetic diagnostic snapshot unless data_kind=real."
+      },
+      "pnl": {
+        "beginning_equity": 1000000.0,
+        "ending_equity": 998221.0,
+        "cash": 98301.0,
+        "reserved_cash": 0.0,
+        "gross_exposure": 0.901523810859519,
+        "net_exposure": 0.901523810859519,
+        "long_exposure": 899920.0,
+        "short_exposure": null,
+        "realized_pnl": 0.0,
+        "unrealized_pnl": -1779.0000000000327,
+        "income": null,
+        "costs": 1529.864,
+        "fees": 1799.84,
+        "financing": null,
+        "adjustments": null,
+        "residual_pnl": 3.2741809263825417e-11,
+        "pnl_total": -1779.0,
+        "net_return": -0.001779,
+        "identity_ok": true,
+        "note": "Income, financing, and tax adjustments are NOT_TESTED. Fill costs are explanatory; they are already in cash via simulated execution prices and are not subtracted twice."
+      },
+      "returns": [
+        {
+          "kind": "simple",
+          "value": -0.001778999999999975,
+          "status": "pass",
+          "annualized": null,
+          "note": "Annualization withheld unless >= 20 observations."
+        },
+        {
+          "kind": "log",
+          "value": -0.0017805842997583117,
+          "status": "pass",
+          "annualized": null,
+          "note": ""
+        },
+        {
+          "kind": "cumulative",
+          "value": -0.001778999999999975,
+          "status": "pass",
+          "annualized": null,
+          "note": ""
+        },
+        {
+          "kind": "time_weighted",
+          "value": -0.001778999999999975,
+          "status": "pass",
+          "annualized": null,
+          "note": ""
+        },
+        {
+          "kind": "money_weighted",
+          "value": -0.001778999999999975,
+          "status": "pass",
+          "annualized": null,
+          "note": "Single-period MWR equals simple return when one cashflow."
+        }
+      ],
+      "attribution": {
+        "method": "exact_accounting",
+        "total": -1779.0,
+        "residual": 3.2741809263825417e-11,
+        "contributions": [
+          {
+            "security_id": "NSE:AAA",
+            "pnl": -800.0000000000114,
+            "return_contribution": -0.0008000000000000114,
+            "realized": 0.0,
+            "unrealized": -800.0000000000114,
+            "cost": 680.0,
+            "turnover": 400800.0,
+            "drawdown_share": null,
+            "exposure_share": 0.4
+          },
+          {
+            "security_id": "NSE:BBB",
+            "pnl": -562.5000000000214,
+            "return_contribution": -0.0005625000000000214,
+            "realized": 0.0,
+            "unrealized": -562.5000000000214,
+            "cost": 510.0,
+            "turnover": 300562.5,
+            "drawdown_share": null,
+            "exposure_share": 0.3
+          },
+          {
+            "security_id": "NSE:CCC",
+            "pnl": -416.5,
+            "return_contribution": -0.0004165,
+            "realized": 0.0,
+            "unrealized": -416.5,
+            "cost": 339.864,
+            "turnover": 200336.5,
+            "drawdown_share": null,
+            "exposure_share": 0.19992
+          }
+        ],
+        "factor_contributions": null,
+        "alpha_contributions": null,
+        "status": "pass",
+        "note": "\u03a3 security contribution + residual = total P&L. Residual is visible; it is never hidden."
+      },
+      "factor_attribution": {
+        "method": "unavailable",
+        "total": -1779.0,
+        "residual": -1779.0,
+        "contributions": [],
+        "factor_contributions": null,
+        "alpha_contributions": null,
+        "status": "not_tested",
+        "note": "Factor returns/exposures were not supplied. NIFTY, sector, and cap series remain NOT_TESTED. No second covariance engine."
+      },
+      "alpha_attribution": {
+        "method": "unavailable",
+        "total": -1779.0,
+        "residual": -1779.0,
+        "contributions": [],
+        "factor_contributions": null,
+        "alpha_contributions": null,
+        "status": "not_tested",
+        "note": "No alpha/model/ensemble lineage weights were supplied. Causal decomposition is unavailable, not estimated."
+      },
+      "drift": {
+        "status": "drifted",
+        "weight_drift": {
+          "NSE:CCC": 0.0002762915226187379,
+          "NSE:BBB": 0.0005346511443858892,
+          "NSE:AAA": 0.000712868192514482
+        },
+        "quantity_drift": {
+          "NSE:CCC": -0.6666666666667425,
+          "NSE:BBB": 0.0,
+          "NSE:AAA": 0.0
+        },
+        "cash_drift": -1521.0999999999767,
+        "exposure_drift": 0.0015238108595190258,
+        "implementation_gap": 0.001523810859519109,
+        "unfilled_quantity": {
+          "NSE:CCC": 0.6666666666667425
+        },
+        "residual_orders": 1,
+        "note": "Observed vs target. No automatic rebalance."
+      },
+      "exposure": {
+        "gross": 0.901523810859519,
+        "net": 0.901523810859519,
+        "long": 899920.0,
+        "short": 0.0,
+        "cash": 98301.0,
+        "reserved_cash": 0.0,
+        "market_value": 899920.0,
+        "equity": 998221.0
+      },
+      "concentration": 0.2910024722196022,
+      "turnover": 0.9033059813408053,
+      "drawdown": {
+        "current_drawdown": -0.001778999999999975,
+        "max_drawdown": -0.001778999999999975,
+        "rolling_volatility": null,
+        "concentration": 0.2910024722196022,
+        "gross_exposure": 0.901523810859519,
+        "net_exposure": 0.901523810859519,
+        "turnover": 0.9033059813408053,
+        "episodes": [
+          {
+            "peak_equity": 1000000.0,
+            "trough_equity": 998221.0,
+            "drawdown": -0.001778999999999975,
+            "start": "2024-01-15T00:00:00Z",
+            "trough": "2024-01-15T00:00:00Z",
+            "recovered": null,
+            "duration_sessions": null
+          }
+        ],
+        "note": "Drawdown is diagnostic. Limits are not changed."
+      },
+      "benchmark": {
+        "benchmark_id": "ew-universe-synthetic",
+        "kind": "equal_weight_universe",
+        "returns": [
+          -0.001996007984031989,
+          -0.0018714909544604863,
+          -0.0020790020790020236
+        ],
+        "relative_return": 0.0002031670058315247,
+        "status": "pass",
+        "note": "Internal equal-weight diagnostic on the paper snapshot. Not NIFTY. Not an official index. BENCHMARK RELATIVE vs ABSOLUTE."
+      },
+      "feedback": [
+        {
+          "feedback_id": "FB-5fa24168aef8",
+          "kind": "turnover_costs",
+          "observation": "turnover 0.9033",
+          "attribution": "turnover",
+          "interpretation": "Turnover is large relative to equity.",
+          "research_question": "Does a lower-frequency policy survive costs?",
+          "is_hypothesis": false,
+          "note": "Feedback is not automatically a new hypothesis."
+        },
+        {
+          "feedback_id": "FB-064bdbe7e1cb",
+          "kind": "target_deviation",
+          "observation": "implementation gap 0.001524",
+          "attribution": "paper vs target",
+          "interpretation": "Paper execution deviated materially from the target.",
+          "research_question": "Is the gap rounding, liquidity, or an accounting break?",
+          "is_hypothesis": false,
+          "note": "Feedback is not automatically a new hypothesis."
+        }
+      ],
+      "reconciliation_ok": true,
+      "live_trading": false,
+      "note": "A profitable observation is not automatically alpha. The portfolio may have made money without establishing why."
+    }
+  ]
+}

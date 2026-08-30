@@ -1,0 +1,16 @@
+from typing import Protocol, runtime_checkable
+
+from quantlab.domain.models import Order, Position
+
+
+@runtime_checkable
+class BrokerGateway(Protocol):
+    def get_account(self) -> dict[str, float]: ...
+
+    def get_positions(self) -> list[Position]: ...
+
+    def get_orders(self) -> list[Order]: ...
+
+    def place_order(self, order: Order) -> Order: ...
+
+    def cancel_order(self, order_id: str) -> Order: ...

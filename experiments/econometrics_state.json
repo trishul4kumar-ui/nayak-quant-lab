@@ -1,0 +1,261 @@
+{
+  "last": "ECO-41d93a929833",
+  "results": [
+    {
+      "run": {
+        "econometrics_run_id": "ECO-41d93a929833",
+        "spec_id": "seed-econo",
+        "as_of": "2024-01-15T00:00:00Z",
+        "run_hash": "2b20e7e3462c6446",
+        "family_id": "econo-family",
+        "tested_count": 1,
+        "live_trading": false,
+        "note": "Synthetic diagnostic. Not NSE evidence. Not a claim."
+      },
+      "spec": {
+        "spec_id": "seed-econo",
+        "estimator": "ols",
+        "series_ids": [
+          "stationary",
+          "walk",
+          "y",
+          "x"
+        ],
+        "lags": 1,
+        "include_constant": true,
+        "as_of": "2024-01-15T00:00:00Z",
+        "window_start": null,
+        "window_end": null,
+        "snapshot_id": "synthetic-diagnostic",
+        "seed": 0,
+        "note": "Specification identity. Changing the formula creates a new spec."
+      },
+      "diagnostics": {
+        "stationarity": [
+          {
+            "method": "adf",
+            "statistic": -5.150998835060837,
+            "critical_5": -2.86,
+            "rejects_unit_root": true,
+            "lags": 1,
+            "n": 120,
+            "status": "pass",
+            "note": "Tabulated MacKinnon 5% critical value. Not a certified p-value."
+          },
+          {
+            "method": "adf",
+            "statistic": -2.488260859446428,
+            "critical_5": -2.86,
+            "rejects_unit_root": false,
+            "lags": 1,
+            "n": 120,
+            "status": "pass",
+            "note": "Tabulated MacKinnon 5% critical value. Not a certified p-value."
+          },
+          {
+            "method": "kpss",
+            "statistic": 0.09292941190814798,
+            "critical_5": 0.463,
+            "rejects_unit_root": false,
+            "lags": 10,
+            "n": 120,
+            "status": "pass",
+            "note": "KPSS null is stationarity. rejects_unit_root here means reject stationarity."
+          }
+        ],
+        "dependence": {
+          "acf": [
+            1.0,
+            0.4655492474105988,
+            0.2493395384434254,
+            0.09040965085014448,
+            0.07470658300045445,
+            0.09100718982381732,
+            0.03707451944536188,
+            -0.05032543201171675,
+            -0.08327688989448298
+          ],
+          "pacf": [
+            1.0,
+            0.4655492474105988,
+            0.04162509819781186,
+            -0.05143436971837241,
+            0.05388214766053243,
+            0.05857663767506489,
+            -0.04586917466434123,
+            -0.08800474451491593,
+            -0.030160761052673995
+          ],
+          "ljung_box": 38.57000467658111,
+          "hac_lags": 8,
+          "status": "pass",
+          "note": "HAC/Newey-West lags equal the diagnostic window. Residuals are not 'fixed'."
+        },
+        "cointegration": {
+          "method": "engle_granger",
+          "statistic": -6.042127584636697,
+          "beta": 1.0012114372661476,
+          "residual_adf": {
+            "method": "adf",
+            "statistic": -6.042127584636697,
+            "critical_5": -2.86,
+            "rejects_unit_root": true,
+            "lags": 1,
+            "n": 120,
+            "status": "pass",
+            "note": "Tabulated MacKinnon 5% critical value. Not a certified p-value."
+          },
+          "status": "pass",
+          "note": "Engle-Granger residual ADF. A stationary residual is not a trading signal and is not Johansen rank."
+        },
+        "causality": {
+          "method": "granger",
+          "statistic": 3.49464266775471,
+          "p_value": 1.0,
+          "lags": 3,
+          "claim": "predictive",
+          "status": "pass",
+          "note": "PREDICTIVE only. Granger is not structural causation. CORRELATION \u2260 CAUSATION."
+        },
+        "breaks": {
+          "kind": "cusum",
+          "statistic": 2.6994635462411907,
+          "break_index": 19,
+          "status": "pass",
+          "note": "CUSUM of OLS residuals. A peak is a research flag, not an automatic regime model."
+        },
+        "residuals": [
+          -0.24762815546309602,
+          -0.4240792037383361,
+          0.4654310245745559,
+          -1.9340825818668537,
+          -1.0135323911519247,
+          -1.489673775527954,
+          2.9254119703504413,
+          0.6513964227216607,
+          -0.16315754012729822,
+          -0.006727948262756467,
+          -0.14341325471043276,
+          -0.6879374711391386,
+          0.1636910761764847,
+          0.14118882779108377,
+          -0.15618558162329021,
+          1.4275066207631069,
+          -0.5501381416753293,
+          0.21056290263257438,
+          1.2683926198926443,
+          0.5543023317563938,
+          -0.5449134750033553,
+          -0.008221800076942065,
+          0.4182144150664857,
+          2.3036932169785924,
+          0.41603473876797437,
+          -0.3428927517046997,
+          0.5809746886002636,
+          -0.8453197877311045,
+          -0.17630056720780574,
+          -0.02707875512684299,
+          0.8746265987772373,
+          0.4400664977648838,
+          0.8740552212351322,
+          -1.8353886901862115,
+          0.9914790045708323,
+          -0.3742988899907831,
+          -1.3226383214065394,
+          -0.13599435053408127,
+          0.6308359335317204,
+          -0.2612653360567858,
+          -0.7130480648043318,
+          0.019366151682392196,
+          -0.4318539431933077,
+          1.0569563046420547,
+          0.6661930196223927,
+          0.6974517811856532,
+          1.256840793725982,
+          0.4111435802569998,
+          0.12493362551494414,
+          0.4188875080131067,
+          0.7097577108829527,
+          0.1803368209119327,
+          -0.7191994550960814,
+          -0.07851421517134449,
+          -1.9638300332756753,
+          0.5383180043328761,
+          0.4050204420647302,
+          -0.7995588059788681,
+          0.10851571763286616,
+          -0.5192455110562686,
+          1.1856719046682778,
+          -1.413032567340764,
+          -0.6380028092115007,
+          0.36869087815203105,
+          1.453913412262965,
+          -2.02921759899976,
+          -1.259122250202303,
+          0.6398209663520129,
+          -0.9892989162048256,
+          0.9827752828102589,
+          -0.07920196764803578,
+          0.116635713889786,
+          -1.0723990377989754,
+          1.5829755197652702,
+          0.1405052524183361,
+          -0.43199243907443474,
+          -2.5741881173719676
+        ],
+        "note": ""
+      },
+      "var": {
+        "spec_id": "var-l3",
+        "lags": 3,
+        "n_series": 2,
+        "selected_on": "train_window",
+        "aic": 19.031876843216246,
+        "note": "Lag selection uses the training window only."
+      },
+      "vecm": {
+        "spec_id": "vecm-eg",
+        "lags": 1,
+        "rank": 1,
+        "status": "pass",
+        "note": "ECM from Engle-Granger residual. Not Johansen rank."
+      },
+      "panel": {
+        "spec_id": "panel-two_way",
+        "effect": "two_way",
+        "clustered": true,
+        "note": "Clustered errors are diagnostic, not a license to ignore dependence."
+      },
+      "causal": {
+        "hypothesis_id": "H-CAUSAL-SEED",
+        "method": "did",
+        "treatment": "treated",
+        "outcome": "y",
+        "pretreat_only_controls": true,
+        "claim": "causal_under_assumptions",
+        "assumptions": [
+          "parallel_trends_untested",
+          "no_anticipation"
+        ],
+        "note": "Assumptions are explicit. Correlation is not causation."
+      },
+      "economics": {
+        "statistical": "pass",
+        "economic_effect": 1.0012114372661476,
+        "execution_adjusted": 1.0002114372661477,
+        "robust": "pass",
+        "status": "pass",
+        "note": "Execution-adjusted uses Prompt 13 explicit bps. A positive statistic is not a claim and not a live edge."
+      },
+      "multiple_testing": {
+        "family_id": "econo-family",
+        "method": "benjamini_hochberg",
+        "tested_count": "1",
+        "discoveries": "0",
+        "note": "correction is diagnostic; it does not imply economic significance"
+      },
+      "live_trading": false,
+      "note": "Synthetic architecture diagnostic. CORRELATION \u2260 CAUSATION. IN-SAMPLE FIT \u2260 OOS EVIDENCE. Prompt 05 remains the gate."
+    }
+  ]
+}

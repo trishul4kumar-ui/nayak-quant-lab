@@ -1,0 +1,72 @@
+"""Human-readable validation report. The ledger row remains the machine record."""
+
+from __future__ import annotations
+
+from quantlab.research.suite import ValidationReport
+
+
+def format_validation_report(report: ValidationReport) -> str:
+    gate = report.gate
+    stats = report.statistics
+    lines = [
+        "QUANT LAB RESEARCH VALIDATION REPORT",
+        "====================================",
+        "",
+        f"Experiment: {report.experiment_id}",
+        f"Config hash: {report.config_hash}",
+        f"Data kind: {report.data_kind}",
+        f"Protocol: {report.validation_protocol}",
+        f"Seed: {report.seed}",
+        f"Git dirty: {report.git_dirty}",
+        f"Python: {report.python_version}",
+        "",
+        "PERFORMANCE",
+        "-----------",
+        f"Total return: {report.performance.total_return:.6f}",
+        f"CAGR: {report.performance.cagr:.6f}",
+        f"Volatility: {report.performance.volatility:.6f}",
+        f"Sharpe: {report.performance.sharpe:.6f}",
+        f"Sortino: {report.performance.sortino:.6f}",
+        f"Calmar: {report.performance.calmar:.6f}",
+        f"Max drawdown: {report.performance.max_drawdown:.6f}",
+        f"Turnover: {report.performance.mean_turnover:.6f}",
+        "",
+        "OUT-OF-SAMPLE",
+        "-------------",
+        f"Windows: {report.oos_windows}",
+        f"OOS return: {report.oos_total_return}",
+        f"OOS Sharpe: {report.oos_sharpe}",
+        "",
+        "ROBUSTNESS",
+        "----------",
+        f"Cost points: {len(report.robustness.cost_points)}",
+        f"Parameter points: {len(report.robustness.parameter_points)}",
+        f"Fragile parameter: {report.robustness.fragile_parameter}",
+        f"Regimes: {len(report.robustness.regimes)}",
+        "",
+        "STATISTICS",
+        "----------",
+        f"Sample size: {stats.n}",
+        f"Effect size: {stats.effect_size}",
+        f"CI: [{stats.mean_ci_low}, {stats.mean_ci_high}]",
+        f"P-value: {stats.p_value}",
+        f"Null model: {stats.null_model}",
+        f"Status: {stats.status.value}",
+        "",
+        "MULTIPLE TESTING",
+        "----------------",
+        f"Hypotheses: {report.multiple_testing.n_hypotheses}",
+        f"Correction: {report.multiple_testing.method}",
+        f"Discoveries: {report.multiple_testing.discoveries}",
+        f"Deflated Sharpe: {report.deflated_sharpe.deflated_sharpe}",
+        f"PBO: {report.overfitting.pbo} ({report.overfitting.status.value})",
+        "",
+        "RESEARCH GATE",
+        "-------------",
+        f"Result: {gate.outcome.value}",
+        f"Reasons: {', '.join(f'{r.name}={r.result.value}' for r in gate.reasons)}",
+        f"Warnings: {'; '.join(gate.warnings)}",
+        "",
+        "Note: synthetic performance is never market evidence.",
+    ]
+    return "\n".join(lines) + "\n"

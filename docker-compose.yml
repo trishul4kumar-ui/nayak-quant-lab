@@ -1,0 +1,21 @@
+# Local research infrastructure only. Does not enable live trading.
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: quantlab
+      POSTGRES_PASSWORD: quantlab
+      POSTGRES_DB: quantlab
+    ports:
+      - "5432:5432"
+    volumes:
+      - quantlab_pg:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    ports:
+      - "6379:6379"
+
+volumes:
+  quantlab_pg:
