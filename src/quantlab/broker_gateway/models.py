@@ -66,6 +66,24 @@ class BrokerAccountSnapshot(BaseModel):
     write_enabled: bool = False
 
 
+class BrokerProfileSnapshot(BaseModel):
+    """Sanitized broker identity. Personal details and credentials never persist."""
+
+    model_config = ConfigDict(frozen=True)
+
+    snapshot_id: str
+    broker: str
+    account_id_hash: str
+    captured_at: datetime
+    payload_hash: str
+    exchanges: tuple[str, ...] = ()
+    products: tuple[str, ...] = ()
+    order_types: tuple[str, ...] = ()
+    user_type: str = "unknown"
+    live_trading: bool = False
+    write_enabled: bool = False
+
+
 class BrokerPositionSnapshot(BaseModel):
     model_config = ConfigDict(frozen=True)
 
@@ -249,6 +267,7 @@ class GatewaySnapshotBundle(BaseModel):
     connection_id: str
     adapter_id: str
     provenance: Provenance
+    profile: BrokerProfileSnapshot
     account: BrokerAccountSnapshot
     positions: tuple[BrokerPositionSnapshot, ...]
     holdings: tuple[BrokerHoldingSnapshot, ...]

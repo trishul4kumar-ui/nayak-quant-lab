@@ -3,11 +3,19 @@ from __future__ import annotations
 from collections.abc import Callable
 
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QFrame, QLabel, QProgressBar, QPushButton, QScrollArea, QTabWidget, QVBoxLayout
+from PySide6.QtWidgets import (
+    QFrame,
+    QLabel,
+    QProgressBar,
+    QPushButton,
+    QScrollArea,
+    QTabWidget,
+    QVBoxLayout,
+)
 
 from quantlab.app.assistant import NayakAssistant
 from quantlab.app.bootstrap import ApplicationRuntime
-from quantlab.ui.learn_content import LearnStage, LEARN_TOUR_TABS, learn_progress, unlocked_stages
+from quantlab.ui.learn_content import LEARN_TOUR_TABS, LearnStage, learn_progress, unlocked_stages
 from quantlab.ui.widgets import ExplainChip
 from quantlab.ui.widgets.explain import glossary_entries
 from quantlab.ui.widgets.lab_shell import LabPageShell
@@ -93,7 +101,9 @@ class LearnPage(LabPageShell):
         glossary_layout.setContentsMargins(16, 14, 16, 14)
         glossary_head = QLabel("Metrics glossary")
         glossary_head.setStyleSheet("font-weight: 600;")
-        glossary_sub = QLabel("Every ? chip in the lab links here — plain language, no jargon wall.")
+        glossary_sub = QLabel(
+            "Every ? chip in the lab links here — plain language, no jargon wall."
+        )
         glossary_sub.setWordWrap(True)
         glossary_sub.setObjectName("nayakVoice")
         glossary_layout.addWidget(glossary_head)

@@ -153,12 +153,8 @@ def test_reproduction_break_on_wrong_hash() -> None:
 
 
 def test_future_payload_ignored_does_not_change_identity() -> None:
-    a = create_candidate(
-        CertificationRequest(candidate_id="fp", future_payload_ignored={})
-    )
-    b = create_candidate(
-        CertificationRequest(candidate_id="fp", future_payload_ignored={"x": "y"})
-    )
+    a = create_candidate(CertificationRequest(candidate_id="fp", future_payload_ignored={}))
+    b = create_candidate(CertificationRequest(candidate_id="fp", future_payload_ignored={"x": "y"}))
     assert a.run.certification_id == b.run.certification_id
 
 

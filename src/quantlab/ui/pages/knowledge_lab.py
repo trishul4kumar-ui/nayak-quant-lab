@@ -87,9 +87,7 @@ class KnowledgeLabPage(CatalogLabPage):
             truncate_columns={0, 2},
         )
         graph_edges = [
-            (str(row[0]), str(row[1]), str(row[2]))
-            for row in edge_rows
-            if len(row) >= 3
+            (str(row[0]), str(row[1]), str(row[2])) for row in edge_rows if len(row) >= 3
         ]
         self._graph.set_edges(graph_edges)
         last = last_snapshot_row()

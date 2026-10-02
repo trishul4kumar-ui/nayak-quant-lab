@@ -30,9 +30,7 @@ class PromotionLabPage(CatalogLabPage):
             on_empty_action=self._run,
         )
         self._runtime = runtime
-        badges = QLabel(
-            "LIVE DISABLED  ·  CERTIFIED ≠ LIVE  ·  NO BROKER  ·  SAFETY NOT WAIVABLE"
-        )
+        badges = QLabel("LIVE DISABLED  ·  CERTIFIED ≠ LIVE  ·  NO BROKER  ·  SAFETY NOT WAIVABLE")
         badges.setWordWrap(True)
         self.body().addWidget(badges)
         self.refresh()

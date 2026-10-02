@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Any
 
 from quantlab.core.identifiers import InstrumentId
 from quantlab.core.time import PointInTime
@@ -29,6 +30,8 @@ def freeze(
     *,
     as_of: datetime,
     halted: bool = False,
+    provenance: dict[str, Any] | None = None,
+    source_manifest: str = SOURCE_MANIFEST,
 ) -> RealTimeSnapshot:
     allowed = tuple(row for row in observations if row.event_time <= as_of)
     qualities = [quality_mod.classify(row) for row in allowed]
@@ -52,16 +55,17 @@ def freeze(
         "quality": overall_q.value,
         "sequence": seq.value,
         "calendar": session_mod.calendar_version(),
-        "source": SOURCE_MANIFEST,
+        "source": source_manifest,
         "master": SECURITY_MASTER,
         "schema": "3.1.0",
+        "provenance": provenance or {},
     }
     snapshot_hash = sha256(payload)
     names = {row.security_id for row in allowed}
     return RealTimeSnapshot(
         snapshot_id=f"rt-{snapshot_hash[:12]}",
         snapshot_hash=snapshot_hash,
-        source_manifest_hash=sha256(SOURCE_MANIFEST),
+        source_manifest_hash=sha256(source_manifest),
         security_master_hash=sha256(SECURITY_MASTER),
         calendar_version=session_mod.calendar_version(),
         as_of=as_of,
@@ -71,7 +75,11 @@ def freeze(
         session=session,
         sequence_kind=seq,
         n_names=len(names),
-        extras={"future_ignored": len(observations) - len(allowed)},
+        extras={
+            "future_ignored": len(observations) - len(allowed),
+            "source_manifest": source_manifest,
+            **(provenance or {}),
+        },
     )
 
 

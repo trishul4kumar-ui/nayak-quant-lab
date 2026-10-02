@@ -95,7 +95,9 @@ def report_returns(
             kind=ReturnKind.SIMPLE,
             value=simple,
             status=CheckResult.PASS if simple is not None else CheckResult.NOT_TESTED,
-            annualized=None if not enough else (
+            annualized=None
+            if not enough
+            else (
                 (1.0 + simple) ** (252 / max(len(period_returns), 1)) - 1.0
                 if simple is not None
                 else None

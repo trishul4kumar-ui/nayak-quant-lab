@@ -12,6 +12,7 @@ from quantlab.broker_gateway.models import (
     BrokerMarginSnapshot,
     BrokerOrderSnapshot,
     BrokerPositionSnapshot,
+    BrokerProfileSnapshot,
     GatewaySnapshotBundle,
     InstrumentMapping,
     Provenance,
@@ -28,6 +29,8 @@ class BrokerAdapter(Protocol):
     def disconnect(self) -> BrokerHealth: ...
 
     def health(self) -> BrokerHealth: ...
+
+    def profile(self) -> BrokerProfileSnapshot: ...
 
     def account(self) -> BrokerAccountSnapshot: ...
 

@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from PySide6.QtWidgets import QTableWidget
+
 from quantlab.app.bootstrap import ApplicationRuntime
 from quantlab.app.queries import (
     last_cross_section_state_row,
@@ -11,7 +13,13 @@ from quantlab.app.queries import (
     regime_catalog_rows,
 )
 from quantlab.app.settings_store import ExperienceMode
-from quantlab.ui.widgets import ExplainChip, TerminalGrid, TerminalPanel, WatchlistWidget, fill_table
+from quantlab.ui.widgets import (
+    ExplainChip,
+    TerminalGrid,
+    TerminalPanel,
+    WatchlistWidget,
+    fill_table,
+)
 from quantlab.ui.widgets.charts import SparklineWidget
 from quantlab.ui.widgets.lab_shell import LabPageShell
 
@@ -31,8 +39,6 @@ class MarketPage(LabPageShell):
         self.add_toolbar_widget(ExplainChip("regime", label="Regime"))
 
         body = self.body()
-        from PySide6.QtWidgets import QTableWidget
-
         self._watchlist = WatchlistWidget()
         self._watchlist.instrument_selected.connect(self._show_instrument)
         self._price_spark = SparklineWidget(min_height=120)
@@ -62,7 +68,7 @@ class MarketPage(LabPageShell):
         self.refresh()
 
     @property
-    def models(self):
+    def models(self) -> QTableWidget:
         return self._models
 
     def _show_instrument(self, row: dict[str, Any]) -> None:

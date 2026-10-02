@@ -21,9 +21,7 @@ def _run_row(result: OpsResult) -> ExperimentRun:
         name=f"ops:{result.state.value}",
         hypothesis="Ops control plane is not live trading.",
         status=(
-            ExperimentStatus.PASSED
-            if result.health.value != "failed"
-            else ExperimentStatus.FAILED
+            ExperimentStatus.PASSED if result.health.value != "failed" else ExperimentStatus.FAILED
         ),
         git_commit=git_commit(),
         dataset_version="ops",

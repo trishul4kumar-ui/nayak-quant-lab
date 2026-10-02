@@ -52,9 +52,7 @@ def user_benchmark(
     portfolio_return: float | None,
 ) -> BenchmarkSeries:
     bench = sum(returns) / len(returns) if returns else None
-    relative = None if portfolio_return is None or bench is None else (
-        portfolio_return - bench
-    )
+    relative = None if portfolio_return is None or bench is None else (portfolio_return - bench)
     return BenchmarkSeries(
         benchmark_id="user-supplied",
         kind=BenchmarkKind.USER_SUPPLIED,

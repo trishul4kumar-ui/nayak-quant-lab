@@ -37,9 +37,7 @@ def factor_attribution(
         SecurityContribution(
             security_id=name,
             pnl=value,
-            return_contribution=value / pnl.beginning_equity
-            if pnl.beginning_equity
-            else 0.0,
+            return_contribution=value / pnl.beginning_equity if pnl.beginning_equity else 0.0,
         )
         for name, value in contributions.items()
     ]

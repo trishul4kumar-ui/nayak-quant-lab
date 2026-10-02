@@ -209,7 +209,9 @@ class BacktestPage(LabPageShell):
         ]
         metric_rows.insert(0, ["experiment_id", exp_id[:16]])
         metric_rows.append(["conclusion", str(result.get("conclusion", ""))])
-        fill_table(self.metrics, ["Metric", "Value"], metric_rows, experiment_links={(0, 1): exp_id})
+        fill_table(
+            self.metrics, ["Metric", "Value"], metric_rows, experiment_links={(0, 1): exp_id}
+        )
         integrity = result.get("integrity") or {}
         fill_table(
             self.integrity,

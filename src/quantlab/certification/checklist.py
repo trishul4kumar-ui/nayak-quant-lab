@@ -55,6 +55,4 @@ def merge_status(
 ) -> ChecklistItem:
     if existing.status is ItemStatus.WAIVED:
         return existing
-    return existing.model_copy(
-        update={"status": status, "evidence_id": evidence_id, "note": note}
-    )
+    return existing.model_copy(update={"status": status, "evidence_id": evidence_id, "note": note})

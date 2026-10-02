@@ -10,15 +10,16 @@ from PySide6.QtWidgets import (
     QFrame,
     QLabel,
     QVBoxLayout,
+    QWidget,
 )
 
-from quantlab.app.live_ops import live_gate_rows
 from quantlab.app.bootstrap import ApplicationRuntime
+from quantlab.app.live_ops import live_gate_rows
 from quantlab.ui.widgets.lab_shell import StatusBadge
 
 
 class LiveConfirmDialog(QDialog):
-    def __init__(self, runtime: ApplicationRuntime, *, parent=None) -> None:
+    def __init__(self, runtime: ApplicationRuntime, *, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._runtime = runtime
         self.setWindowTitle("Enable live trading")

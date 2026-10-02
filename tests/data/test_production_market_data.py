@@ -71,9 +71,7 @@ def test_market_get_does_not_use_future() -> None:
 
 def test_symbol_at_is_historical() -> None:
     master = InstrumentMaster()
-    master.add(
-        CanonicalInstrument(security_id="SEC:1", exchange="NSE", symbol="NEWCO")
-    )
+    master.add(CanonicalInstrument(security_id="SEC:1", exchange="NSE", symbol="NEWCO"))
     rename = datetime(2024, 2, 1, tzinfo=UTC)
     master.add_symbol(
         SymbolBinding(
@@ -83,18 +81,14 @@ def test_symbol_at_is_historical() -> None:
             valid_to=rename,
         )
     )
-    master.add_symbol(
-        SymbolBinding(security_id="SEC:1", symbol="NEWCO", valid_from=rename)
-    )
+    master.add_symbol(SymbolBinding(security_id="SEC:1", symbol="NEWCO", valid_from=rename))
     assert master.symbol_at("SEC:1", datetime(2024, 1, 15, tzinfo=UTC)) == "OLDCO"
     assert master.symbol_at("SEC:1", datetime(2024, 3, 1, tzinfo=UTC)) == "NEWCO"
 
 
 def test_current_ticker_not_mapped_backward() -> None:
     master = InstrumentMaster()
-    master.add(
-        CanonicalInstrument(security_id="SEC:1", exchange="NSE", symbol="NEWCO")
-    )
+    master.add(CanonicalInstrument(security_id="SEC:1", exchange="NSE", symbol="NEWCO"))
     assert master.resolve_symbol("NEWCO", datetime(2019, 1, 1, tzinfo=UTC)) is None or True
     # without historical binding, current symbol is not evidence for 2019
     early = master.symbol_at("SEC:1", datetime(2019, 1, 1, tzinfo=UTC))
@@ -146,9 +140,7 @@ def test_snapshot_hash_changes_with_dependency() -> None:
 
 
 def test_cross_source_unresolved() -> None:
-    diff = compare_closes(
-        source_a="a", source_b="b", close_a=100.0, close_b=110.0, tolerance=0.01
-    )
+    diff = compare_closes(source_a="a", source_b="b", close_a=100.0, close_b=110.0, tolerance=0.01)
     assert diff.resolution_status is ResolutionStatus.UNRESOLVED
 
 
@@ -172,9 +164,7 @@ def test_universe_as_of_not_today() -> None:
     master = InstrumentMaster()
     listed = datetime(2020, 1, 1, tzinfo=UTC)
     master.add(
-        CanonicalInstrument(
-            security_id="S:AAA", exchange="NSE", symbol="AAA", listing_date=listed
-        )
+        CanonicalInstrument(security_id="S:AAA", exchange="NSE", symbol="AAA", listing_date=listed)
     )
     master.add(
         CanonicalInstrument(

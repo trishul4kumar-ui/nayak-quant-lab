@@ -91,9 +91,7 @@ def allowed_targets(current: CertificationState) -> frozenset[CertificationState
 
 def assert_transition(current: CertificationState, target: CertificationState) -> None:
     if target is current:
-        raise IllegalCertificationTransition(
-            f"no-op transition is not recorded: {current.value}"
-        )
+        raise IllegalCertificationTransition(f"no-op transition is not recorded: {current.value}")
     if target not in _ALLOWED[current]:
         raise IllegalCertificationTransition(
             f"illegal certification transition: {current.value} → {target.value}"

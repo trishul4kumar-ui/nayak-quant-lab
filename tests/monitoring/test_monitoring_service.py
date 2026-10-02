@@ -71,9 +71,7 @@ def test_simple_and_log_return() -> None:
 
 
 def test_no_annualize_with_few_obs() -> None:
-    rows = report_returns(
-        beginning=100.0, ending=110.0, period_returns=[0.1], risk_free=0.0
-    )
+    rows = report_returns(beginning=100.0, ending=110.0, period_returns=[0.1], risk_free=0.0)
     simple = next(row for row in rows if row.kind is ReturnKind.SIMPLE)
     assert simple.annualized is None
 

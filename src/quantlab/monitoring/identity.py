@@ -24,9 +24,7 @@ def hash_pnl(pnl: PnLBreakdown) -> str:
 
 
 def hash_snapshot(snapshot: PerformanceSnapshot) -> str:
-    return _dump(
-        snapshot.model_dump(mode="json", exclude={"snapshot_hash", "note"})
-    )
+    return _dump(snapshot.model_dump(mode="json", exclude={"snapshot_hash", "note"}))
 
 
 def hash_attribution(result: AttributionResult) -> str:

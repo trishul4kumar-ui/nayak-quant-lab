@@ -19,11 +19,46 @@ _GATE_LABELS: dict[str, str] = {
 }
 
 _PAPER_DEMO_HOLDINGS: list[dict[str, Any]] = [
-    {"instrument": "NSE:RELIANCE", "weight": 0.22, "weight_pct": "22.0%", "notional": 220_000, "pnl": "—", "source": "paper_demo"},
-    {"instrument": "NSE:INFY", "weight": 0.18, "weight_pct": "18.0%", "notional": 180_000, "pnl": "—", "source": "paper_demo"},
-    {"instrument": "NSE:TCS", "weight": 0.15, "weight_pct": "15.0%", "notional": 150_000, "pnl": "—", "source": "paper_demo"},
-    {"instrument": "NSE:HDFCBANK", "weight": 0.12, "weight_pct": "12.0%", "notional": 120_000, "pnl": "—", "source": "paper_demo"},
-    {"instrument": "CASH", "weight": 0.33, "weight_pct": "33.0%", "notional": 330_000, "pnl": "—", "source": "paper_demo"},
+    {
+        "instrument": "NSE:RELIANCE",
+        "weight": 0.22,
+        "weight_pct": "22.0%",
+        "notional": 220_000,
+        "pnl": "—",
+        "source": "paper_demo",
+    },
+    {
+        "instrument": "NSE:INFY",
+        "weight": 0.18,
+        "weight_pct": "18.0%",
+        "notional": 180_000,
+        "pnl": "—",
+        "source": "paper_demo",
+    },
+    {
+        "instrument": "NSE:TCS",
+        "weight": 0.15,
+        "weight_pct": "15.0%",
+        "notional": 150_000,
+        "pnl": "—",
+        "source": "paper_demo",
+    },
+    {
+        "instrument": "NSE:HDFCBANK",
+        "weight": 0.12,
+        "weight_pct": "12.0%",
+        "notional": 120_000,
+        "pnl": "—",
+        "source": "paper_demo",
+    },
+    {
+        "instrument": "CASH",
+        "weight": 0.33,
+        "weight_pct": "33.0%",
+        "notional": 330_000,
+        "pnl": "—",
+        "source": "paper_demo",
+    },
 ]
 
 
@@ -58,7 +93,9 @@ def target_holdings(runtime: ApplicationRuntime) -> tuple[list[dict[str, Any]], 
 
     prefs = runtime.ui_settings.current
     if prefs.broker_wizard_complete and prefs.broker_adapter == "paper":
-        return list(_PAPER_DEMO_HOLDINGS), "Paper adapter demo book — illustrative only, not live PnL."
+        return list(
+            _PAPER_DEMO_HOLDINGS
+        ), "Paper adapter demo book — illustrative only, not live PnL."
 
     return [], ""
 

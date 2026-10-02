@@ -518,9 +518,7 @@ def ingest_paper_oms(graph: KnowledgeGraph, result: object, decision: object) ->
     graph.add_edge(relate(rec_id, dec_id, RelationType.EVIDENCE_FOR))
     if result.reconciliation.status.value == "reconciliation_break":
         dead = f"dead-end:recon-{result.run.oms_run_id}"
-        graph.add_node(
-            _node(dead, NodeType.DEAD_END, ref_id=result.run.oms_run_id, status="break")
-        )
+        graph.add_node(_node(dead, NodeType.DEAD_END, ref_id=result.run.oms_run_id, status="break"))
         graph.add_edge(relate(rec_id, dead, RelationType.FALSIFIED_BY, basis="reconciliation"))
 
 
@@ -1280,6 +1278,3 @@ def persist_digital_twin(result: object, ledger_path: Path) -> None:
     graph = load_graph(path) if path.exists() else KnowledgeGraph(graph_id="kg-ledger")
     ingest_digital_twin(graph, result)
     save_graph(graph, path)
-
-
-

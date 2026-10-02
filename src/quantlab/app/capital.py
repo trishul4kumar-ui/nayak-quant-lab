@@ -266,11 +266,7 @@ def last_decision_row(ledger: ExperimentLedger | None = None) -> dict[str, Any] 
             "hash": d.decision_hash,
         }
     source = ledger or ExperimentLedger(Path(get_settings().experiment_ledger_path))
-    runs = [
-        run
-        for run in source.list_runs()
-        if run.selection_stage == "capital_allocation"
-    ]
+    runs = [run for run in source.list_runs() if run.selection_stage == "capital_allocation"]
     if not runs:
         return None
     run = runs[-1]

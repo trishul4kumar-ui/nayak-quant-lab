@@ -57,6 +57,7 @@ from quantlab.ui.pages.digital_twin_lab import DigitalTwinLabPage
 from quantlab.ui.pages.discovery_lab import DiscoveryLabPage
 from quantlab.ui.pages.econometrics_lab import EconometricsLabPage
 from quantlab.ui.pages.ensemble import EnsemblePage
+from quantlab.ui.pages.execution_authorization_lab import ExecutionAuthorizationLabPage
 from quantlab.ui.pages.execution_lab import ExecutionLabPage
 from quantlab.ui.pages.experiments import ExperimentsPage
 from quantlab.ui.pages.features import FeaturesPage
@@ -65,17 +66,21 @@ from quantlab.ui.pages.journal import JournalPage
 from quantlab.ui.pages.knowledge_lab import KnowledgeLabPage
 from quantlab.ui.pages.learn import LearnPage
 from quantlab.ui.pages.learning import LearningPage
+from quantlab.ui.pages.live_operations_lab import LiveOperationsLabPage
 from quantlab.ui.pages.logs import LogsPage
 from quantlab.ui.pages.market import MarketPage
 from quantlab.ui.pages.monitoring_lab import MonitoringLabPage
 from quantlab.ui.pages.ops_lab import OpsLabPage
 from quantlab.ui.pages.paper_oms_lab import PaperOMSLabPage
 from quantlab.ui.pages.portfolio import PortfolioPage
+from quantlab.ui.pages.production_shadow_lab import ProductionShadowLabPage
 from quantlab.ui.pages.promotion_lab import PromotionLabPage
 from quantlab.ui.pages.realtime_data_lab import RealTimeDataLabPage
 from quantlab.ui.pages.realtime_decision_lab import RealTimeDecisionLabPage
+from quantlab.ui.pages.reconciliation_lab import ReconciliationLabPage
 from quantlab.ui.pages.research import ResearchPage
 from quantlab.ui.pages.research_control import ResearchControlPage
+from quantlab.ui.pages.restricted_execution_lab import RestrictedExecutionLabPage
 from quantlab.ui.pages.risk import RiskPage
 from quantlab.ui.pages.safety_lab import SafetyLabPage
 from quantlab.ui.pages.settings_page import SettingsPage
@@ -258,12 +263,16 @@ class MainWindow(QMainWindow):
         self.econometrics_lab = EconometricsLabPage(runtime)
         self.certification_lab = CertificationLabPage(runtime)
         self.shadow_lab = ShadowLabPage(runtime)
+        self.production_shadow_lab = ProductionShadowLabPage(runtime)
+        self.execution_authorization_lab = ExecutionAuthorizationLabPage(runtime)
+        self.restricted_execution_lab = RestrictedExecutionLabPage(runtime)
         self.safety_lab = SafetyLabPage(runtime)
         self.promotion_lab = PromotionLabPage(runtime)
         self.realtime_data_lab = RealTimeDataLabPage(runtime)
         self.realtime_decision_lab = RealTimeDecisionLabPage(runtime)
         self.digital_twin_lab = DigitalTwinLabPage(runtime)
         self.ops_lab = OpsLabPage(runtime)
+        self.live_operations_lab = LiveOperationsLabPage(runtime)
         self.features = FeaturesPage(runtime)
         self.alpha = AlphaPage(runtime)
         self.adaptive = AdaptivePage(runtime)
@@ -277,6 +286,7 @@ class MainWindow(QMainWindow):
         self.logs = LogsPage(runtime)
         self.broker = BrokerPage(runtime)
         self.broker_gateway_lab = BrokerGatewayLabPage(runtime)
+        self.reconciliation_lab = ReconciliationLabPage(runtime)
 
         wire_journal_links(self.backtest.metrics, self._goto_journal_entry)
         wire_journal_links(self.validation.summary, self._goto_journal_entry)
@@ -313,12 +323,16 @@ class MainWindow(QMainWindow):
             "econo": self.econometrics_lab,
             "certify": self.certification_lab,
             "shadow": self.shadow_lab,
+            "shadow_prod": self.production_shadow_lab,
+            "execution_auth": self.execution_authorization_lab,
+            "restricted_execution": self.restricted_execution_lab,
             "safety": self.safety_lab,
             "promote": self.promotion_lab,
             "rt_data": self.realtime_data_lab,
             "rt_decision": self.realtime_decision_lab,
             "twin": self.digital_twin_lab,
             "ops": self.ops_lab,
+            "live_ops": self.live_operations_lab,
             "alpha": self.alpha,
             "models": self.adaptive,
             "learning": self.learning,
@@ -331,6 +345,7 @@ class MainWindow(QMainWindow):
             "execution": self.execution_lab,
             "broker": self.broker,
             "gateway": self.broker_gateway_lab,
+            "reconcile": self.reconciliation_lab,
             "ai": self.ai_research,
             "experiments": self.experiments,
             "system": self.system,
@@ -407,7 +422,7 @@ class MainWindow(QMainWindow):
         escape_clear = QShortcut(QKeySequence(Qt.Key.Key_Escape), self)
         escape_clear.activated.connect(self._clear_nav_search)
 
-        self._last_status_sig: tuple | None = None
+        self._last_status_sig: tuple[object, ...] | None = None
         self._register_nav_shortcuts()
         self._update_nav_search_visibility()
         self._apply_sidebar_collapsed(prefs.sidebar_collapsed)
@@ -901,10 +916,15 @@ class MainWindow(QMainWindow):
             "econo",
             "certify",
             "shadow",
+            "shadow_prod",
             "safety",
             "promote",
             "ops",
             "gateway",
+            "reconcile",
+            "execution_auth",
+            "restricted_execution",
+            "live_ops",
             "logs",
         )
         for key in refresh_keys:
@@ -926,7 +946,7 @@ class MainWindow(QMainWindow):
             self._last_status_sig = sig
             self._paint_status()
 
-    def _status_signature(self) -> tuple:
+    def _status_signature(self) -> tuple[object, ...]:
         status = self.runtime.status
         prefs = self.runtime.ui_settings.current
         return (

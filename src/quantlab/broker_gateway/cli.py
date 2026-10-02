@@ -21,8 +21,10 @@ from quantlab.app.broker_gateway import (
     margins_payload,
     orders_payload,
     positions_payload,
+    profile_payload,
     reconcile_payload,
     snapshot_payload,
+    trades_payload,
 )
 
 
@@ -33,15 +35,18 @@ def add_broker_parser(sub: Any) -> None:
     inspect_p = cmd.add_parser("inspect", help="inspect a snapshot")
     inspect_p.add_argument("item_id", nargs="?", default="last")
     cmd.add_parser("health", help="connection health")
-    connect_p = cmd.add_parser("connect", help="connect read-only mock adapter")
+    connect_p = cmd.add_parser("connect", help="connect a read-only account adapter")
     connect_p.add_argument("--scenario", default="normal")
+    connect_p.add_argument("--adapter", choices=("mock", "kite"), default="mock")
     cmd.add_parser("disconnect", help="disconnect")
     cmd.add_parser("account", help="account snapshot")
+    cmd.add_parser("profile", help="sanitized account profile")
     cmd.add_parser("positions", help="positions")
     cmd.add_parser("holdings", help="holdings")
     cmd.add_parser("margins", help="margins")
     cmd.add_parser("orders", help="orders (read-only)")
     cmd.add_parser("fills", help="fills (read-only)")
+    cmd.add_parser("trades", help="trades (read-only)")
     cmd.add_parser("snapshot", help="immutable snapshot")
     cmd.add_parser("reconcile", help="three-way reconciliation")
     cmd.add_parser("audit", help="audit trail")
@@ -66,18 +71,21 @@ def run_broker_command(args: Any) -> int:
     cmd = args.broker_cmd
     item = getattr(args, "item_id", "last")
     scenario = getattr(args, "scenario", "normal")
+    adapter = getattr(args, "adapter", "mock")
     mapping: dict[str, Callable[[], Any]] = {
         "list": list_payload,
         "inspect": lambda: inspect_payload(item),
         "health": health_payload,
-        "connect": lambda: connect_payload(scenario),
+        "connect": lambda: connect_payload(scenario, adapter=adapter),
         "disconnect": disconnect_payload,
         "account": account_payload,
+        "profile": profile_payload,
         "positions": positions_payload,
         "holdings": holdings_payload,
         "margins": margins_payload,
         "orders": orders_payload,
         "fills": fills_payload,
+        "trades": trades_payload,
         "snapshot": snapshot_payload,
         "reconcile": reconcile_payload,
         "audit": audit_payload,

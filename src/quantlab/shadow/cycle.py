@@ -6,9 +6,7 @@ from quantlab.core.errors import InvalidShadowTransition
 from quantlab.shadow.enums import CycleStatus, ShadowMode, ShadowOrderStatus
 
 _MODE: dict[ShadowMode, frozenset[ShadowMode]] = {
-    ShadowMode.OFF: frozenset(
-        {ShadowMode.RESEARCH_PAPER, ShadowMode.PAPER, ShadowMode.SHADOW}
-    ),
+    ShadowMode.OFF: frozenset({ShadowMode.RESEARCH_PAPER, ShadowMode.PAPER, ShadowMode.SHADOW}),
     ShadowMode.RESEARCH_PAPER: frozenset(
         {ShadowMode.PAUSED, ShadowMode.HALTED, ShadowMode.OFF, ShadowMode.ERROR}
     ),
@@ -40,9 +38,7 @@ _MODE: dict[ShadowMode, frozenset[ShadowMode]] = {
         }
     ),
     ShadowMode.HALTED: frozenset({ShadowMode.RECOVERY, ShadowMode.OFF}),
-    ShadowMode.ERROR: frozenset(
-        {ShadowMode.RECOVERY, ShadowMode.HALTED, ShadowMode.OFF}
-    ),
+    ShadowMode.ERROR: frozenset({ShadowMode.RECOVERY, ShadowMode.HALTED, ShadowMode.OFF}),
     ShadowMode.RECOVERY: frozenset(
         {
             ShadowMode.RESEARCH_PAPER,
@@ -105,9 +101,7 @@ _ORDER: dict[ShadowOrderStatus, frozenset[ShadowOrderStatus]] = {
     ShadowOrderStatus.SIMULATED: frozenset(
         {ShadowOrderStatus.PARTIAL, ShadowOrderStatus.COMPLETED, ShadowOrderStatus.REJECTED}
     ),
-    ShadowOrderStatus.PARTIAL: frozenset(
-        {ShadowOrderStatus.COMPLETED, ShadowOrderStatus.REJECTED}
-    ),
+    ShadowOrderStatus.PARTIAL: frozenset({ShadowOrderStatus.COMPLETED, ShadowOrderStatus.REJECTED}),
     ShadowOrderStatus.COMPLETED: frozenset({ShadowOrderStatus.RECONCILED}),
     ShadowOrderStatus.RECONCILED: frozenset(),
     ShadowOrderStatus.ABSTAINED: frozenset(),
@@ -142,8 +136,6 @@ def assert_order_transition(current: ShadowOrderStatus, target: ShadowOrderStatu
         )
 
 
-def advance_order(
-    current: ShadowOrderStatus, target: ShadowOrderStatus
-) -> ShadowOrderStatus:
+def advance_order(current: ShadowOrderStatus, target: ShadowOrderStatus) -> ShadowOrderStatus:
     assert_order_transition(current, target)
     return target

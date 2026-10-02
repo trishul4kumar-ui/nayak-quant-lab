@@ -7,10 +7,12 @@ from datetime import UTC, datetime
 from quantlab.broker_gateway.audit import history
 from quantlab.broker_gateway.audit import record as record_audit
 from quantlab.broker_gateway.audit import reset_for_tests as reset_audit
-from quantlab.broker_gateway.errors import BrokerWriteError
+from quantlab.broker_gateway.errors import BrokerGatewayError, BrokerWriteError
+from quantlab.broker_gateway.kite import KiteReadOnlyAdapter
 from quantlab.broker_gateway.mock import MockBrokerAdapter
 from quantlab.broker_gateway.models import (
     BrokerHealth,
+    BrokerProfileSnapshot,
     GatewayIncident,
     GatewaySnapshotBundle,
     InternalBooks,
@@ -63,6 +65,17 @@ def set_adapter(adapter: BrokerAdapter) -> None:
     _ADAPTER = adapter
 
 
+def select_adapter(name: str) -> None:
+    """Select an explicit observation adapter. No selection can enable writes."""
+    if name == "mock":
+        set_adapter(MockBrokerAdapter())
+        return
+    if name == "kite":
+        set_adapter(KiteReadOnlyAdapter.from_environment())
+        return
+    raise BrokerGatewayError(f"unknown read-only broker adapter: {name}")
+
+
 def _assert_safety() -> LiveSafetyGates:
     gates = LiveSafetyGates()
     assert gates.live_trading is False
@@ -71,10 +84,14 @@ def _assert_safety() -> LiveSafetyGates:
     return gates
 
 
-def connect(scenario: MockScenario | str | None = None) -> BrokerHealth:
+def connect(
+    scenario: MockScenario | str | None = None, *, adapter_name: str | None = None
+) -> BrokerHealth:
     _assert_safety()
     before_cert = cert_state()
-    if scenario is not None:
+    if adapter_name is not None:
+        select_adapter(adapter_name)
+    elif scenario is not None:
         value = MockScenario(scenario) if isinstance(scenario, str) else scenario
         set_adapter(MockBrokerAdapter(value))
     adapter = _adapter()
@@ -156,6 +173,20 @@ def health() -> BrokerHealth:
         broker_connected=state is ConnectionState.CONNECTED_READ_ONLY,
         credential_redacted=redact(),
     )
+
+
+def profile() -> BrokerProfileSnapshot:
+    _assert_safety()
+    item = _adapter().profile()
+    record_audit(
+        {
+            "event": "profile",
+            "adapter_id": _adapter().adapter_id,
+            "account_id_hash": item.account_id_hash,
+            "live_trading": False,
+        }
+    )
+    return item
 
 
 def snapshot() -> GatewaySnapshotBundle:

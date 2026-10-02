@@ -53,9 +53,7 @@ def test_idempotent_same_request() -> None:
 
 def test_future_payload_ignored_does_not_change_hash() -> None:
     a = run_econometrics(EconometricRequest(seed=4, future_payload_ignored={}))
-    b = run_econometrics(
-        EconometricRequest(seed=4, future_payload_ignored={"leak": "ignored"})
-    )
+    b = run_econometrics(EconometricRequest(seed=4, future_payload_ignored={"leak": "ignored"}))
     assert a.run.run_hash == b.run.run_hash
 
 

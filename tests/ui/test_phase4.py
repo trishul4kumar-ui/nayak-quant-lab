@@ -9,14 +9,14 @@ pytest.importorskip("PySide6")
 from PySide6.QtWidgets import QApplication, QLabel
 
 from quantlab.app.ai_chat import ai_status, chat
+from quantlab.app.assistant import NayakAssistant
+from quantlab.app.bootstrap import bootstrap
 from quantlab.app.chart_data import (
     BENCHMARK_LABEL,
     drawdown_episode_rows,
     equity_chart_series,
     rebase_to_one,
 )
-from quantlab.app.assistant import NayakAssistant
-from quantlab.app.bootstrap import bootstrap
 from quantlab.app.settings_store import UiTheme
 from quantlab.ui.pages.ai_research import AiResearchPage
 from quantlab.ui.theme import LIGHT_STYLESHEET, apply_theme, chart_palette, stylesheet_for

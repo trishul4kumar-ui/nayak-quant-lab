@@ -15,6 +15,7 @@ class FeedState(StrEnum):
     DEGRADED = "degraded"
     STALE = "stale"
     HALTED = "halted"
+    RECOVERING = "recovering"
     UNKNOWN = "unknown"
 
 
@@ -32,8 +33,13 @@ LEGAL: frozenset[tuple[FeedState, FeedState]] = frozenset(
         (FeedState.DEGRADED, FeedState.STALE),
         (FeedState.DEGRADED, FeedState.DISCONNECTED),
         (FeedState.STALE, FeedState.CONNECTED),
+        (FeedState.STALE, FeedState.RECOVERING),
         (FeedState.STALE, FeedState.DISCONNECTED),
         (FeedState.HALTED, FeedState.DISCONNECTED),
+        (FeedState.HALTED, FeedState.RECOVERING),
+        (FeedState.RECOVERING, FeedState.CONNECTED),
+        (FeedState.RECOVERING, FeedState.DEGRADED),
+        (FeedState.RECOVERING, FeedState.DISCONNECTED),
         (FeedState.UNKNOWN, FeedState.DISCONNECTED),
         (FeedState.UNKNOWN, FeedState.CONNECTING),
     }

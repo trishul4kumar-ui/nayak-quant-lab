@@ -37,7 +37,14 @@ def market_rows() -> list[dict[str, Any]]:
 def market_close_series(instrument_id: str, *, n_days: int = 40) -> list[float]:
     """Close prices for sparkline charts in Market Lab."""
     provider = MemoryBarProvider(n_days=n_days)
-    series = provider.all_bars().get(instrument_id)
+    series = next(
+        (
+            bars
+            for instrument, bars in provider.all_bars().items()
+            if str(instrument) == instrument_id
+        ),
+        None,
+    )
     if not series:
         return []
     return [float(bar.close) for bar in series]

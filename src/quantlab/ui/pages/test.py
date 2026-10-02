@@ -21,7 +21,7 @@ from quantlab.app.assistant import NayakAssistant
 from quantlab.app.bootstrap import ApplicationRuntime
 from quantlab.app.copy import SYNTHETIC_SHARPE_DISCLAIMER
 from quantlab.app.jobs import Job, JobStatus
-from quantlab.app.strategy_templates import TEMPLATES, template_by_id
+from quantlab.app.strategy_templates import TEMPLATES, StrategyTemplate, template_by_id
 from quantlab.ui.widgets import EquityCurveWidget, ExplainChip, fill_table
 from quantlab.ui.widgets.charts import DashboardStrip
 from quantlab.ui.widgets.lab_shell import LabPageShell, data_kind_badge
@@ -119,7 +119,7 @@ class BacktestWizardPage(LabPageShell):
         layout.addStretch()
         return page
 
-    def _selected_template(self):
+    def _selected_template(self) -> StrategyTemplate:
         for button in self._template_group.buttons():
             if button.isChecked():
                 tid = button.property("template_id")
@@ -318,7 +318,9 @@ class BacktestWizardPage(LabPageShell):
             accent="#42a5f5",
         )
         if isinstance(sharpe, float):
-            self._dash.card(0).set_target_progress(sharpe, 1.0, headroom_label="vs 1.0 Sharpe target")
+            self._dash.card(0).set_target_progress(
+                sharpe, 1.0, headroom_label="vs 1.0 Sharpe target"
+            )
         if isinstance(dd, float):
             self._dash.card(2).set_target_progress(
                 abs(dd),
@@ -337,8 +339,7 @@ class BacktestWizardPage(LabPageShell):
         gate_color = "#66bb6a" if str(gate).lower() == "pass" else "#ffa726"
         self._dash.card(3).set_value(str(gate)[:12], accent=gate_color)
         self._result_intro.setText(
-            f"Done, {self._assistant.tk_name}. Sharpe {sharpe_txt}. "
-            f"{SYNTHETIC_SHARPE_DISCLAIMER}"
+            f"Done, {self._assistant.tk_name}. Sharpe {sharpe_txt}. {SYNTHETIC_SHARPE_DISCLAIMER}"
         )
         rows = [[k, f"{v:.4f}" if isinstance(v, float) else str(v)] for k, v in metrics.items()]
         rows.insert(0, ["experiment_id", exp_id[:12]])
@@ -408,9 +409,7 @@ class BacktestWizardPage(LabPageShell):
         idx = self._stack.currentIndex()
         self._step_label.setText(f"Step {idx + 1} of 4")
         self._back.setEnabled(idx > 0 and self._job is None)
-        if idx == 0:
-            self._next.setText("Next →")
-        elif idx == 1:
+        if idx == 0 or idx == 1:
             self._next.setText("Next →")
         elif idx == 2:
             self._next.setText("Run →" if self._job is None else "Running…")

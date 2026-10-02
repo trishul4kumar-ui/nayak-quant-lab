@@ -27,8 +27,7 @@ def report_from_result(
         safety_gate_failure="safety_readiness" in blocked_ids,
         reconciliation_failure="reconciliation" in blocked_ids,
         revoked_certification=result.state.value == "revoked",
-        ai_authorization_override=request.ai_override
-        or request.actor is ActorKind.AI_SUGGESTION,
+        ai_authorization_override=request.ai_override or request.actor is ActorKind.AI_SUGGESTION,
         capital_limit_mutation=request.max_capital > 0 and request.model_mutated,
         release_policy_mutation=request.config_mutated,
         certification_hash_mismatch=request.model_mutated,

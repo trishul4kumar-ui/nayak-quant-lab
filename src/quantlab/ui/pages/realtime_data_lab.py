@@ -50,6 +50,13 @@ class RealTimeDataLabPage(CatalogLabPage):
                 ["Quality", str(last["quality"]), "data", "not silently valid"],
                 ["Freshness", str(last["freshness"]), "clock", "FRESH ≠ VALID"],
                 ["Session", str(last["session"]), "calendar", "weekday IST"],
+                [
+                    "Source",
+                    str(last.get("active_source", "mock-observe-only")),
+                    "provenance",
+                    "explicit",
+                ],
+                ["Coverage", str(last.get("coverage", "unknown")), "health", "not inferred"],
                 ["Hash", str(last["hash"]), "identity", "immutable"],
             ]
         )

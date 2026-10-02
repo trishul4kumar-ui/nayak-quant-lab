@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from contextlib import suppress
+
 from quantlab.app.bootstrap import ApplicationRuntime
 from quantlab.app.discovery import family_rows, last_discovery_experiment_row
 from quantlab.ui.widgets.catalog_page import CatalogLabPage
@@ -67,10 +69,8 @@ class DiscoveryLabPage(CatalogLabPage):
         if isinstance(novelty, (int, float)):
             bar_items.append(("Novelty", float(novelty), "#66bb6a"))
         elif isinstance(novelty, str):
-            try:
+            with suppress(ValueError):
                 bar_items.append(("Novelty", float(novelty), "#66bb6a"))
-            except ValueError:
-                pass
         self._bars.set_items(bar_items)
         self.set_last_run(
             [

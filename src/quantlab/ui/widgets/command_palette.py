@@ -43,9 +43,7 @@ class CommandPalette(QDialog):
         self.resize(560, 420)
 
         layout = QVBoxLayout(self)
-        hint = QLabel(
-            "↑↓ navigate · Enter run · Esc close · Recent commands shown when empty"
-        )
+        hint = QLabel("↑↓ navigate · Enter run · Esc close · Recent commands shown when empty")
         hint.setObjectName("nayakVoice")
         self._search = QLineEdit()
         self._search.setPlaceholderText("backtest · portfolio · run validation · open experiment…")

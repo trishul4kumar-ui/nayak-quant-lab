@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from contextlib import suppress
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
@@ -110,13 +111,12 @@ class EmptyState(QFrame):
         text.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(head)
         layout.addWidget(text)
+        self._action_btn: QPushButton | None = None
         if action_label and on_action is not None:
             self._action_btn = QPushButton(action_label)
             self._action_btn.setObjectName("primary")
             self._action_btn.clicked.connect(on_action)
             layout.addWidget(self._action_btn, alignment=Qt.AlignmentFlag.AlignCenter)
-        else:
-            self._action_btn = None
 
     def set_action(self, action_label: str | None, on_action: Callable[[], None] | None) -> None:
         if self._action_btn is None:
@@ -126,10 +126,8 @@ class EmptyState(QFrame):
         if action_label:
             self._action_btn.setText(action_label)
         if on_action is not None:
-            try:
+            with suppress(RuntimeError):
                 self._action_btn.clicked.disconnect()
-            except RuntimeError:
-                pass
             self._action_btn.clicked.connect(on_action)
 
 

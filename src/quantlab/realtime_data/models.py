@@ -125,6 +125,14 @@ class FeedHealth(BaseModel):
     security_mapping_health: str
     snapshot_health: QualityStatus
     overall: str
+    active_source: str | None = None
+    source_priority: tuple[str, ...] = ()
+    source_switches: tuple[str, ...] = ()
+    coverage: float | None = None
+    event_to_receive_ms: float | None = None
+    receive_to_process_ms: float | None = None
+    process_to_snapshot_ms: float | None = None
+    corporate_action_state: str = "unknown"
     live_trading: bool = False
     write_enabled: bool = False
     note: str = "CONNECTED ≠ HEALTHY. UNKNOWN is never healthy."

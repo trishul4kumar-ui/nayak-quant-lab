@@ -4,8 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
-from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QPushButton
+from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QPushButton, QWidget
 
 
 class NotificationStrip(QFrame):
@@ -13,7 +12,7 @@ class NotificationStrip(QFrame):
         self,
         *,
         on_dismiss: Callable[[], None] | None = None,
-        parent=None,
+        parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
         self._on_dismiss = on_dismiss

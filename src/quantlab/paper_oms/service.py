@@ -206,9 +206,7 @@ def run_paper_oms(
             )
         )
         try:
-            order = advance(
-                order, OrderLifecycleState.VALIDATED, events, EventType.ORDER_VALIDATED
-            )
+            order = advance(order, OrderLifecycleState.VALIDATED, events, EventType.ORDER_VALIDATED)
             validate_order(order, books, used_snapshot, firewall=firewall)
             order = advance(order, OrderLifecycleState.PLANNED, events, EventType.ORDER_PLANNED)
             if instruction.side is Side.BUY:

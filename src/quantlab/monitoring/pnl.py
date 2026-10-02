@@ -24,23 +24,15 @@ def pnl_from_account(
     deposits: float = 0.0,
 ) -> PnLBreakdown:
     equity_identity(account)
-    long_exp = sum(
-        max(pos.market_value, 0.0) for pos in account.positions.values()
+    long_exp = sum(max(pos.market_value, 0.0) for pos in account.positions.values())
+    short_raw = sum(min(pos.market_value, 0.0) for pos in account.positions.values())
+    short_exp = (
+        abs(short_raw) if any(pos.quantity < 0 for pos in account.positions.values()) else None
     )
-    short_raw = sum(
-        min(pos.market_value, 0.0) for pos in account.positions.values()
-    )
-    short_exp = abs(short_raw) if any(
-        pos.quantity < 0 for pos in account.positions.values()
-    ) else None
     realized = sum(pos.realized_pnl for pos in account.positions.values())
     unrealized = sum(pos.unrealized_pnl for pos in account.positions.values())
     fill_costs = sum(item.total_cost for item in fills) if fills else None
-    fill_fees = (
-        sum(item.commission + item.taxes + item.fees for item in fills)
-        if fills
-        else None
-    )
+    fill_fees = sum(item.commission + item.taxes + item.fees for item in fills) if fills else None
     pnl_total = account.equity - beginning_equity - deposits
     explained = realized + unrealized
     residual = pnl_total - explained

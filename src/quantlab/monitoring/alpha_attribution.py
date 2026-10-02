@@ -35,9 +35,7 @@ def alpha_attribution(
             SecurityContribution(
                 security_id=name,
                 pnl=piece,
-                return_contribution=piece / pnl.beginning_equity
-                if pnl.beginning_equity
-                else 0.0,
+                return_contribution=piece / pnl.beginning_equity if pnl.beginning_equity else 0.0,
             )
         )
     residual = pnl.pnl_total - explained

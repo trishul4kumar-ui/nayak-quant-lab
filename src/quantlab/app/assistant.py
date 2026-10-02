@@ -215,8 +215,8 @@ class NayakAssistant:
         return FocusSuggestion(
             title="Run another experiment",
             body=(f"Last: {last.name} (Sharpe {sharpe_txt}). {SYNTHETIC_SHARPE_DISCLAIMER}"),
-                action_label="Start Test wizard",
-                action=FocusAction.FIRST_BACKTEST,
+            action_label="Start Test wizard",
+            action=FocusAction.FIRST_BACKTEST,
             step=5,
         )
 

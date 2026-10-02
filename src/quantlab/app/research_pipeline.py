@@ -50,23 +50,37 @@ def build_research_pipeline(runtime: ApplicationRuntime) -> list[PipelineStage]:
         idea = PipelineStage("idea", "Idea", "learn", PipelineStatus.PENDING, "Complete onboarding")
 
     if _job_active(runtime, "backtest"):
-        backtest = PipelineStage("backtest", "Backtest", "test", PipelineStatus.RUNNING, "Job running")
+        backtest = PipelineStage(
+            "backtest", "Backtest", "test", PipelineStatus.RUNNING, "Job running"
+        )
     elif runs:
-        backtest = PipelineStage("backtest", "Backtest", "test", PipelineStatus.PASS, f"{len(runs)} run(s)")
+        backtest = PipelineStage(
+            "backtest", "Backtest", "test", PipelineStatus.PASS, f"{len(runs)} run(s)"
+        )
     else:
-        backtest = PipelineStage("backtest", "Backtest", "test", PipelineStatus.PENDING, "Run Test wizard")
+        backtest = PipelineStage(
+            "backtest", "Backtest", "test", PipelineStatus.PENDING, "Run Test wizard"
+        )
 
     val_row = last_validation_row(runtime)
     if _job_active(runtime, "validate"):
-        validate = PipelineStage("validate", "Validate", "validation", PipelineStatus.RUNNING, "Suite running")
+        validate = PipelineStage(
+            "validate", "Validate", "validation", PipelineStatus.RUNNING, "Suite running"
+        )
     elif val_row is None:
-        validate = PipelineStage("validate", "Validate", "validation", PipelineStatus.PENDING, "Not run yet")
+        validate = PipelineStage(
+            "validate", "Validate", "validation", PipelineStatus.PENDING, "Not run yet"
+        )
     else:
         gate = str(val_row.get("gate_outcome") or "").lower()
         if gate == "pass":
-            validate = PipelineStage("validate", "Validate", "validation", PipelineStatus.PASS, "Gate passed")
+            validate = PipelineStage(
+                "validate", "Validate", "validation", PipelineStatus.PASS, "Gate passed"
+            )
         elif gate in {"fail", "failed"}:
-            validate = PipelineStage("validate", "Validate", "validation", PipelineStatus.FAIL, "Gate failed")
+            validate = PipelineStage(
+                "validate", "Validate", "validation", PipelineStatus.FAIL, "Gate failed"
+            )
         else:
             validate = PipelineStage(
                 "validate",
@@ -79,17 +93,27 @@ def build_research_pipeline(runtime: ApplicationRuntime) -> list[PipelineStage]:
     if has_note:
         journal = PipelineStage("journal", "Journal", "journal", PipelineStatus.PASS, "Notes saved")
     elif runs:
-        journal = PipelineStage("journal", "Journal", "journal", PipelineStatus.PENDING, "Add a note")
+        journal = PipelineStage(
+            "journal", "Journal", "journal", PipelineStatus.PENDING, "Add a note"
+        )
     else:
-        journal = PipelineStage("journal", "Journal", "journal", PipelineStatus.PENDING, "After first run")
+        journal = PipelineStage(
+            "journal", "Journal", "journal", PipelineStatus.PENDING, "After first run"
+        )
 
     if runtime.mode is AppMode.LIVE:
         live = PipelineStage("live", "Live", "broker", PipelineStatus.PASS, "LIVE mode active")
     elif not runtime.gates.all_pass():
-        live = PipelineStage("live", "Live", "broker", PipelineStatus.BLOCKED, "Safety gates incomplete")
+        live = PipelineStage(
+            "live", "Live", "broker", PipelineStatus.BLOCKED, "Safety gates incomplete"
+        )
     elif prefs.broker_wizard_complete:
-        live = PipelineStage("live", "Live", "broker", PipelineStatus.PENDING, "Paper ready — gates pending")
+        live = PipelineStage(
+            "live", "Live", "broker", PipelineStatus.PENDING, "Paper ready — gates pending"
+        )
     else:
-        live = PipelineStage("live", "Live", "broker", PipelineStatus.BLOCKED, "Complete broker wizard")
+        live = PipelineStage(
+            "live", "Live", "broker", PipelineStatus.BLOCKED, "Complete broker wizard"
+        )
 
     return [idea, backtest, validate, journal, live]

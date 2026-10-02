@@ -31,9 +31,7 @@ def allocation_state(drawdown_state: DrawdownState) -> CapitalAllocationState:
     return mapping[drawdown_state]
 
 
-def multiplier(
-    state: CapitalAllocationState, multipliers: AllocationMultipliers
-) -> float:
+def multiplier(state: CapitalAllocationState, multipliers: AllocationMultipliers) -> float:
     return {
         CapitalAllocationState.FULL: multipliers.full,
         CapitalAllocationState.REDUCED: multipliers.reduced,

@@ -13,6 +13,7 @@ from quantlab.broker_gateway.models import (
     BrokerMarginSnapshot,
     BrokerOrderSnapshot,
     BrokerPositionSnapshot,
+    BrokerProfileSnapshot,
     GatewaySnapshotBundle,
     InstrumentMapping,
     MockScenario,
@@ -101,6 +102,20 @@ class MockBrokerAdapter:
             available_margin=20_000.0,
             equity=None if self.scenario is MockScenario.PARTIAL_DATA else 125_000.0,
             buying_power=None if self.scenario is MockScenario.PARTIAL_DATA else 120_000.0,
+        )
+
+    def profile(self) -> BrokerProfileSnapshot:
+        digest = _hash("profile", self.scenario.value)
+        return BrokerProfileSnapshot(
+            snapshot_id=f"profile-{digest[:12]}",
+            broker=self.broker,
+            account_id_hash=account_id_hash("mock-account"),
+            captured_at=_AS_OF,
+            payload_hash=digest,
+            exchanges=("NSE",),
+            products=("CNC",),
+            order_types=("LIMIT",),
+            user_type="mock",
         )
 
     def positions(self) -> tuple[BrokerPositionSnapshot, ...]:
@@ -284,6 +299,7 @@ class MockBrokerAdapter:
             connection_id="conn-mock-1",
             adapter_id=self.adapter_id,
             provenance=prov,
+            profile=self.profile(),
             account=account,
             positions=positions,
             holdings=holdings,

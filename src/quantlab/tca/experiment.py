@@ -29,9 +29,7 @@ def _run_row(result: TCAResult) -> ExperimentRun:
         data_kind="synthetic",
         metrics={
             "shortfall": result.shortfall.total or 0.0,
-            "capacity_breaches": float(
-                sum(1 for row in result.capacity.scenarios if row.breach)
-            ),
+            "capacity_breaches": float(sum(1 for row in result.capacity.scenarios if row.breach)),
         },
         application_version=__version__,
         conclusion="tca observation; not broker TCA",

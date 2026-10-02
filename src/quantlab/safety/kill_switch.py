@@ -40,9 +40,7 @@ def reset_for_tests() -> None:
             _SWITCHES[scope] = _default(
                 scope,
                 active=live,
-                reason="LIVE_RELEASE_KILL on while LIVE_TRADING=false"
-                if live
-                else "inactive",
+                reason="LIVE_RELEASE_KILL on while LIVE_TRADING=false" if live else "inactive",
             )
 
 

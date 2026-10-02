@@ -204,9 +204,13 @@ def run_validation(
         raise IllegalCertificationTransition(
             f"run requires UNDER_VALIDATION, found {current.state.value}"
         )
-    items = used.checklist if used.checklist is not None else wrap_engines(
-        current.candidate,
-        ai_override=used.ai_override,
+    items = (
+        used.checklist
+        if used.checklist is not None
+        else wrap_engines(
+            current.candidate,
+            ai_override=used.ai_override,
+        )
     )
     if used.waiver is not None:
         items = [
@@ -216,9 +220,7 @@ def run_validation(
     reasons = block_reasons(current.candidate, items)
     failed = any(reason.startswith("FAIL:") for reason in reasons)
     target = (
-        CertificationState.VALIDATION_FAILED
-        if failed
-        else CertificationState.VALIDATION_PASSED
+        CertificationState.VALIDATION_FAILED if failed else CertificationState.VALIDATION_PASSED
     )
     assert_transition(current.state, target)
     result = _build_result(

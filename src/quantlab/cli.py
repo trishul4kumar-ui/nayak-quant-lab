@@ -17,11 +17,16 @@ from quantlab.digital_twin.cli import add_twin_parser, run_twin_command
 from quantlab.discovery.cli import add_discovery_parser, run_discovery_command
 from quantlab.econometrics.cli import add_econometrics_parser, run_econometrics_command
 from quantlab.ensemble.cli import add_ensemble_parser, run_ensemble_command
+from quantlab.execution_authorization.cli import (
+    add_execution_authorization_parser,
+    run_execution_authorization_command,
+)
 from quantlab.execution_research.cli import add_execution_parser, run_execution_command
 from quantlab.factors.cli import add_factor_parser, run_factor_command
 from quantlab.features.cli import add_feature_parser, run_feature_command
 from quantlab.knowledge.cli import add_knowledge_parser, run_knowledge_command
 from quantlab.learning.cli import add_model_parser, run_model_command
+from quantlab.live_ops.cli import add_live_ops_parser, run_live_ops_command
 from quantlab.monitoring.cli import add_monitor_parser, run_monitor_command
 from quantlab.ops.cli import add_ops_parser, run_ops_command
 from quantlab.orchestration.cli import (
@@ -32,11 +37,21 @@ from quantlab.orchestration.cli import (
 )
 from quantlab.paper_oms.cli import add_paper_parser, run_paper_command
 from quantlab.portfolio.cli import add_portfolio_parser, run_portfolio_command
-from quantlab.realtime_data.cli import add_realtime_parser, run_realtime_command
+from quantlab.production_shadow.cli import (
+    add_production_shadow_parser,
+    run_production_shadow_command,
+)
+from quantlab.realtime_data.cli import (
+    add_market_data_parser,
+    add_realtime_parser,
+    run_market_data_command,
+    run_realtime_command,
+)
 from quantlab.realtime_decision.cli import (
     add_realtime_decision_parser,
     run_realtime_decision_command,
 )
+from quantlab.reconciliation.cli import add_reconciliation_parser, run_reconciliation_command
 from quantlab.regimes.cli import (
     add_regime_parser,
     add_state_parser,
@@ -69,6 +84,7 @@ def main() -> None:
     add_model_parser(sub)
     add_ensemble_parser(sub)
     add_execution_parser(sub)
+    add_execution_authorization_parser(sub)
     add_hypothesis_parser(sub)
     add_experiment_parser(sub)
     add_discovery_parser(sub)
@@ -77,16 +93,20 @@ def main() -> None:
     add_paper_parser(sub)
     add_monitor_parser(sub)
     add_ops_parser(sub)
+    add_live_ops_parser(sub)
     add_tca_parser(sub)
     add_econometrics_parser(sub)
     add_validation_parser(sub)
     add_certification_parser(sub)
     add_realtime_parser(sub)
+    add_market_data_parser(sub)
     add_realtime_decision_parser(sub)
     add_twin_parser(sub)
     add_safety_parser(sub)
     add_shadow_parser(sub)
+    add_production_shadow_parser(sub)
     add_broker_parser(sub)
+    add_reconciliation_parser(sub)
     add_research_parsers(sub)
     args = parser.parse_args()
     settings = get_settings()
@@ -141,6 +161,8 @@ def main() -> None:
         raise SystemExit(run_ensemble_command(args))
     elif args.cmd == "execution":
         raise SystemExit(run_execution_command(args))
+    elif args.cmd == "execution-auth":
+        raise SystemExit(run_execution_authorization_command(args))
     elif args.cmd == "hypothesis":
         raise SystemExit(run_hypothesis_command(args))
     elif args.cmd == "experiment":
@@ -157,6 +179,8 @@ def main() -> None:
         raise SystemExit(run_monitor_command(args))
     elif args.cmd == "ops":
         raise SystemExit(run_ops_command(args))
+    elif args.cmd == "live-ops":
+        raise SystemExit(run_live_ops_command(args))
     elif args.cmd == "tca":
         raise SystemExit(run_tca_command(args))
     elif args.cmd == "econometrics":
@@ -167,16 +191,22 @@ def main() -> None:
         raise SystemExit(run_certification_command(args))
     elif args.cmd == "realtime":
         raise SystemExit(run_realtime_command(args))
+    elif args.cmd == "market-data":
+        raise SystemExit(run_market_data_command(args))
     elif args.cmd == "realtime-decision":
         raise SystemExit(run_realtime_decision_command(args))
     elif args.cmd == "twin":
         raise SystemExit(run_twin_command(args))
     elif args.cmd == "broker":
         raise SystemExit(run_broker_command(args))
+    elif args.cmd == "reconcile":
+        raise SystemExit(run_reconciliation_command(args))
     elif args.cmd == "safety":
         raise SystemExit(run_safety_command(args))
     elif args.cmd == "shadow":
         raise SystemExit(run_shadow_command(args))
+    elif args.cmd == "shadow-prod":
+        raise SystemExit(run_production_shadow_command(args))
     elif args.cmd in {"backtest", "validate", "research"}:
         raise SystemExit(run_research_command(args))
 

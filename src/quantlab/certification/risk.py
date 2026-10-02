@@ -21,19 +21,11 @@ def assess(candidate: Candidate, items: list[ChecklistItem]) -> list[ModelRiskAs
                 note = "Synthetic research diagnostic. Not NSE evidence."
         elif category is RiskCategory.OVERFITTING:
             status = by_code.get("oos_validation", ItemStatus.NOT_TESTED)
-            severity = (
-                RiskSeverity.HIGH
-                if status is ItemStatus.NOT_TESTED
-                else RiskSeverity.MEDIUM
-            )
+            severity = RiskSeverity.HIGH if status is ItemStatus.NOT_TESTED else RiskSeverity.MEDIUM
             note = "OOS absence keeps overfitting risk visible."
         elif category is RiskCategory.EXECUTION:
             status = by_code.get("tca", ItemStatus.NOT_TESTED)
-            severity = (
-                RiskSeverity.HIGH
-                if status is ItemStatus.NOT_TESTED
-                else RiskSeverity.MEDIUM
-            )
+            severity = RiskSeverity.HIGH if status is ItemStatus.NOT_TESTED else RiskSeverity.MEDIUM
             note = "Missing TCA is not a free execution assumption."
         elif category is RiskCategory.GOVERNANCE:
             status = by_code.get("ai_governance", ItemStatus.NOT_TESTED)

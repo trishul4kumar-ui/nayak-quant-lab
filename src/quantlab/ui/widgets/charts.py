@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from PySide6.QtCore import Qt
-from PySide6.QtGui import QColor, QFont, QPainter, QPainterPath, QPen
+from PySide6.QtCore import QRect, Qt
+from PySide6.QtGui import QColor, QFont, QPainter, QPainterPath, QPaintEvent, QPen, QShowEvent
 from PySide6.QtWidgets import QFrame, QGridLayout, QLabel, QVBoxLayout, QWidget
 
 from quantlab.ui.theme import chart_palette
@@ -34,7 +34,7 @@ def _series_bounds(series: list[ChartSeries]) -> tuple[float, float]:
 
 def _paint_line_path(
     painter: QPainter,
-    rect,
+    rect: QRect,
     values: list[float],
     *,
     color: str,
@@ -72,11 +72,13 @@ def _paint_line_path(
         fill_path.closeSubpath()
         painter.fillPath(fill_path, QColor(fill_color or color).darker(180))
 
-    painter.setPen(QPen(QColor(color), 2, Qt.PenStyle.DashLine if dashed else Qt.PenStyle.SolidLine))
+    painter.setPen(
+        QPen(QColor(color), 2, Qt.PenStyle.DashLine if dashed else Qt.PenStyle.SolidLine)
+    )
     painter.drawPath(path)
 
 
-def _paint_empty(painter: QPainter, rect, message: str) -> None:
+def _paint_empty(painter: QPainter, rect: QRect, message: str) -> None:
     painter.setPen(QColor(chart_palette().muted))
     painter.drawText(rect, Qt.AlignmentFlag.AlignCenter, message)
 
@@ -101,7 +103,7 @@ class SparklineWidget(QWidget):
         self._empty = message
         self.update()
 
-    def paintEvent(self, event: object) -> None:  # noqa: ARG002
+    def paintEvent(self, event: QPaintEvent) -> None:  # noqa: ARG002
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         pal = chart_palette()
@@ -130,7 +132,7 @@ class MultiSeriesChartWidget(QWidget):
         self._empty = message
         self.update()
 
-    def paintEvent(self, event: object) -> None:  # noqa: ARG002
+    def paintEvent(self, event: QPaintEvent) -> None:  # noqa: ARG002
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         rect = self.rect()
@@ -173,7 +175,7 @@ class DrawdownChartWidget(QWidget):
         self._values = list(values)
         self.update()
 
-    def paintEvent(self, event: object) -> None:  # noqa: ARG002
+    def paintEvent(self, event: QPaintEvent) -> None:  # noqa: ARG002
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         rect = self.rect()
@@ -224,7 +226,7 @@ class BarChartWidget(QWidget):
         self._items = list(items)
         self.update()
 
-    def paintEvent(self, event: object) -> None:  # noqa: ARG002
+    def paintEvent(self, event: QPaintEvent) -> None:  # noqa: ARG002
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         rect = self.rect()
@@ -272,7 +274,7 @@ class ScatterChartWidget(QWidget):
         self._y_label = y_label
         self.update()
 
-    def paintEvent(self, event: object) -> None:  # noqa: ARG002
+    def paintEvent(self, event: QPaintEvent) -> None:  # noqa: ARG002
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         rect = self.rect()
@@ -341,7 +343,7 @@ class TargetBarWidget(QWidget):
         self.setVisible(False)
         self.update()
 
-    def paintEvent(self, event: object) -> None:  # noqa: ARG002
+    def paintEvent(self, event: QPaintEvent) -> None:  # noqa: ARG002
         if self._value is None or self._target is None:
             return
         painter = QPainter(self)
@@ -380,7 +382,7 @@ class DonutChartWidget(QWidget):
         self._slices = [(label, weight, color) for label, weight, color in slices if weight > 0]
         self.update()
 
-    def paintEvent(self, event: object) -> None:  # noqa: ARG002
+    def paintEvent(self, event: QPaintEvent) -> None:  # noqa: ARG002
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         rect = self.rect()
@@ -396,7 +398,7 @@ class DonutChartWidget(QWidget):
         outer = size // 2
         inner = int(outer * 0.55)
         start_angle = 90 * 16
-        for label, weight, color in self._slices:
+        for _label, weight, color in self._slices:
             span = int(360 * 16 * weight / total)
             painter.setBrush(QColor(color))
             painter.setPen(Qt.PenStyle.NoPen)
@@ -453,7 +455,7 @@ class KpiCard(QFrame):
         self._title.setStyleSheet(f"color: {pal.muted}; font-size: 11px;")
         self._subtitle.setStyleSheet(f"color: {pal.muted}; font-size: 10px;")
 
-    def showEvent(self, event: object) -> None:  # noqa: ARG002
+    def showEvent(self, event: QShowEvent) -> None:  # noqa: ARG002
         self._sync_theme_colors()
         super().showEvent(event)
 
@@ -527,7 +529,7 @@ class LogTimelineWidget(QWidget):
         self._counts = list(counts)
         self.update()
 
-    def paintEvent(self, event: object) -> None:  # noqa: ARG002
+    def paintEvent(self, event: QPaintEvent) -> None:  # noqa: ARG002
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         rect = self.rect()
@@ -571,7 +573,7 @@ class GraphPreviewWidget(QWidget):
         self._edges = list(edges[:24])
         self.update()
 
-    def paintEvent(self, event: object) -> None:  # noqa: ARG002
+    def paintEvent(self, event: QPaintEvent) -> None:  # noqa: ARG002
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         rect = self.rect()

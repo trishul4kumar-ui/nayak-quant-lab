@@ -6,7 +6,12 @@ from PySide6.QtWidgets import QFrame, QHBoxLayout, QLineEdit, QPushButton
 
 from quantlab.app.bootstrap import ApplicationRuntime
 from quantlab.app.settings_store import ExperienceMode, UiDensity, UiTheme
-from quantlab.ui.navigation import FULL_NAV, NAV_FILTER_SHORTCUT, NAV_SHORTCUTS, SHORTCUT_CONFLICT_NOTES, shortcut_label
+from quantlab.ui.navigation import (
+    FULL_NAV,
+    NAV_FILTER_SHORTCUT,
+    SHORTCUT_CONFLICT_NOTES,
+    shortcut_label,
+)
 from quantlab.ui.widgets.lab_shell import LabPageShell
 
 
@@ -17,7 +22,8 @@ def _shortcut_help_text() -> str:
         "Click section headers — collapse or expand Research / Validate / Execute groups",
         "⌘K / Ctrl+K — command palette (pages, actions, experiment search)",
         "Enter — open first sidebar filter match · Esc — clear sidebar filter",
-        f"{NAV_FILTER_SHORTCUT.replace('Meta+', '⌘').replace('Meta', '⌘')} — focus sidebar page filter",
+        f"{NAV_FILTER_SHORTCUT.replace('Meta+', '⌘').replace('Meta', '⌘')}"
+        " — focus sidebar page filter",
         "",
         "macOS shortcut notes",
         *SHORTCUT_CONFLICT_NOTES,
@@ -132,7 +138,9 @@ class SettingsPage(LabPageShell):
         lab_layout.addLayout(launch_row)
         history_row = QHBoxLayout()
         clear_recents = QPushButton("Clear palette recents")
-        clear_recents.setToolTip("Clears ⌘K palette recents — not your journal, experiments, or assistant hints.")
+        clear_recents.setToolTip(
+            "Clears ⌘K palette recents — not your journal, experiments, or assistant hints."
+        )
         clear_recents.clicked.connect(self._clear_palette_recents)
         history_row.addWidget(clear_recents)
         history_row.addStretch()

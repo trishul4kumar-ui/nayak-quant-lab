@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 from quantlab.app.bootstrap import ApplicationRuntime
+from quantlab.app.live_ops import target_holdings
 from quantlab.app.queries import last_portfolio_experiment_row, portfolio_catalog_rows
 from quantlab.ui.widgets.catalog_page import CatalogLabPage
-from quantlab.app.live_ops import target_holdings
 from quantlab.ui.widgets.charts import BarChartWidget, DonutChartWidget
 from quantlab.ui.widgets.data_table import fill_table
 

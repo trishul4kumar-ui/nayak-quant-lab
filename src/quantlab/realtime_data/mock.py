@@ -81,9 +81,7 @@ def _seed_rows(scenario: MockFeedScenario) -> tuple[MarketObservation, ...]:
         )
     if scenario is MockFeedScenario.CLOCK_DRIFT:
         future = SEED_AS_OF + timedelta(hours=2)
-        return (
-            _observation("TCS", 1, 3500.0, future, QualityStatus.DEGRADED, receive=SEED_AS_OF),
-        )
+        return (_observation("TCS", 1, 3500.0, future, QualityStatus.DEGRADED, receive=SEED_AS_OF),)
     rows: list[MarketObservation] = []
     seq = 1
     for symbol in _NAMES:

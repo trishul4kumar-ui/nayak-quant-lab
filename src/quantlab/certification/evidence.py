@@ -60,11 +60,7 @@ def _paper(items: dict[ChecklistCode, ChecklistItem]) -> None:
     if paper is None:
         return
     recon = paper.reconciliation.status
-    status = (
-        ItemStatus.PASS
-        if recon is ReconciliationStatus.RECONCILED
-        else ItemStatus.FAIL
-    )
+    status = ItemStatus.PASS if recon is ReconciliationStatus.RECONCILED else ItemStatus.FAIL
     items[ChecklistCode.PAPER_RECONCILIATION] = merge_status(
         items[ChecklistCode.PAPER_RECONCILIATION],
         status,
@@ -151,11 +147,7 @@ def _lineage(items: dict[ChecklistCode, ChecklistItem], candidate: Candidate) ->
 
 
 def critical_not_tested(items: list[ChecklistItem]) -> list[ChecklistCode]:
-    return [
-        item.code
-        for item in items
-        if item.critical and item.status is ItemStatus.NOT_TESTED
-    ]
+    return [item.code for item in items if item.critical and item.status is ItemStatus.NOT_TESTED]
 
 
 def failed_items(items: list[ChecklistItem]) -> list[ChecklistCode]:

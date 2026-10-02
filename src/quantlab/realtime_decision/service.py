@@ -82,11 +82,9 @@ def run_realtime_decision(
     if LiveSafetyGates().live_trading:
         transition(DecisionState.HALTED)
         return _store(_abstain(snap, bound, AbstentionReason.SAFETY_BLOCK, DecisionState.HALTED))
-    if snap.quality in {QualityStatus.STALE, QualityStatus.INVALID, QualityStatus.MISSING}:
+    if snap.quality is not QualityStatus.VALID:
         next_state = (
-            DecisionState.STALE
-            if snap.quality is QualityStatus.STALE
-            else DecisionState.ABSTAINED
+            DecisionState.STALE if snap.quality is QualityStatus.STALE else DecisionState.ABSTAINED
         )
         transition(next_state)
         reason = (

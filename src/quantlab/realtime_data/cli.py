@@ -45,6 +45,28 @@ def add_realtime_parser(sub: Any) -> None:
     cmd.add_parser("audit", help="audit trail")
 
 
+def add_market_data_parser(sub: Any) -> None:
+    """Prompt 34 naming surface over the one real-time gateway."""
+    parser = sub.add_parser("market-data", help="production-capable observe-only market data")
+    cmd = parser.add_subparsers(dest="market_data_cmd", required=True)
+    connect = cmd.add_parser("connect", help="connect configured production adapter")
+    connect.add_argument("--adapter", choices=("production", "mock"), default="production")
+    for name in (
+        "disconnect",
+        "status",
+        "sources",
+        "health",
+        "latency",
+        "quality",
+        "coverage",
+        "instruments",
+        "snapshot",
+        "audit",
+        "replay",
+    ):
+        cmd.add_parser(name, help=f"market-data {name}")
+
+
 def add_research_realtime_parsers(research_sub: Any) -> None:
     for name, help_text in (
         ("realtime-data", "observe-only real-time market data"),
@@ -79,6 +101,41 @@ def run_realtime_command(args: Any) -> int:
         "audit": audit_payload,
     }
     print(json.dumps(mapping[cmd](), indent=2, default=str))
+    return 0
+
+
+def run_market_data_command(args: Any) -> int:
+    command = args.market_data_cmd
+    if command == "connect":
+        payload: Any = start_payload("normal", adapter=getattr(args, "adapter", "production"))
+    elif command == "disconnect":
+        payload = stop_payload()
+    elif command == "status":
+        payload = status_payload()
+    elif command == "sources":
+        payload = sources_payload()
+    elif command == "health":
+        payload = health_payload()
+    elif command == "latency":
+        health = health_payload()
+        payload = {
+            key: health.get(key)
+            for key in ("event_to_receive_ms", "receive_to_process_ms", "process_to_snapshot_ms")
+        }
+    elif command == "quality":
+        payload = quality_payload()
+    elif command == "coverage":
+        payload = {"coverage": health_payload().get("coverage"), "live_trading": False}
+    elif command == "instruments":
+        frozen = inspect_payload("last")
+        payload = {"instruments": [row["security_id"] for row in frozen.get("observations", [])]}
+    elif command == "snapshot":
+        payload = snapshot_payload()
+    elif command == "audit":
+        payload = audit_payload()
+    else:
+        payload = replay_payload()
+    print(json.dumps(payload, indent=2, default=str))
     return 0
 
 

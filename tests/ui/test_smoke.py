@@ -149,9 +149,7 @@ def test_main_window_full_mode_nav(tmp_path: Path, qapp: QApplication) -> None:
     assert "RUN SAFETY" in safety_actions
     assert not any(text == "LIVE" or text.startswith("SEND") for text in safety_actions)
     ops_row = next(
-        i
-        for i in range(window.nav.count())
-        if _nav_labels(window)[i] == "Operations Control Lab"
+        i for i in range(window.nav.count()) if _nav_labels(window)[i] == "Operations Control Lab"
     )
     window.nav.setCurrentRow(ops_row)
     qapp.processEvents()
@@ -206,9 +204,7 @@ def test_main_window_full_mode_nav(tmp_path: Path, qapp: QApplication) -> None:
     assert "RUN SNAPSHOT" in rt_data_actions
     assert not any(text == "LIVE" or text.startswith("SEND") for text in rt_data_actions)
     rt_decision_row = next(
-        i
-        for i in range(window.nav.count())
-        if _nav_labels(window)[i] == "Real-Time Decision Lab"
+        i for i in range(window.nav.count()) if _nav_labels(window)[i] == "Real-Time Decision Lab"
     )
     window.nav.setCurrentRow(rt_decision_row)
     qapp.processEvents()

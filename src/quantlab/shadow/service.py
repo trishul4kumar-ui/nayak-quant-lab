@@ -251,9 +251,7 @@ def run_shadow_cycle(
         assert_mode_transition(current, ShadowMode.RESEARCH_PAPER)
         set_mode(ShadowMode.RESEARCH_PAPER)
 
-    production, cert_status = _certification(
-        requested, require_certified=used.require_certified
-    )
+    production, cert_status = _certification(requested, require_certified=used.require_certified)
     effective = requested
     if requested in {ShadowMode.PAPER, ShadowMode.SHADOW} and not production:
         flags = flags.model_copy(update={"certification_expired": True})
@@ -403,9 +401,7 @@ def run_shadow_cycle(
             flags = flags.model_copy(
                 update={
                     "shadow_reconciliation_break": False,
-                    "shadow_accounting_break": not equity_identity(
-                        paper_result.account, portfolio
-                    ),
+                    "shadow_accounting_break": not equity_identity(paper_result.account, portfolio),
                 }
             )
             status = _advance(status, CycleStatus.RECONCILED)

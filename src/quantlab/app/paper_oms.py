@@ -132,9 +132,7 @@ def submit_payload(decision_id: str, *, policy: str = "base", ledger: str = "") 
         "order_count": result.run.order_count,
         "fill_count": result.run.fill_count,
         "reconciliation": result.reconciliation.status.value,
-        "weights_vs_positions": [
-            gap.model_dump(mode="json") for gap in result.reconciliation.gaps
-        ],
+        "weights_vs_positions": [gap.model_dump(mode="json") for gap in result.reconciliation.gaps],
         "live_trading": False,
         "selection_stage": run.selection_stage,
         "note": "Paper submit. Simulated fills. Not broker-confirmed.",

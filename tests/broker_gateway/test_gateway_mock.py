@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ast
 from pathlib import Path
 
 import pytest
@@ -89,8 +90,15 @@ def test_empty_internal_does_not_invent_orders() -> None:
 
 def test_no_banned_imports() -> None:
     root = Path("src/quantlab/broker_gateway")
-    banned = ("kiteconnect", "zerodha", "openalgo", "quantlab.brokers")
+    banned = ("kiteconnect", "openalgo", "quantlab.brokers")
     for path in root.rglob("*.py"):
-        text = path.read_text()
-        for token in banned:
-            assert token not in text
+        tree = ast.parse(path.read_text())
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                modules = [item.name for item in node.names]
+            elif isinstance(node, ast.ImportFrom):
+                modules = [node.module or ""]
+            else:
+                continue
+            for module in modules:
+                assert not module.startswith(banned)

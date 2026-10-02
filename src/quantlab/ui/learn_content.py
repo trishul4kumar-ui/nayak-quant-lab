@@ -177,7 +177,8 @@ LEARN_TOUR_TABS: tuple[LearnTourTab, ...] = (
     LearnTourTab(
         "research",
         "Research",
-        "Frame a hypothesis and inspect synthetic market panels before you commit capital — even simulated.",
+        "Frame a hypothesis and inspect synthetic market panels before you commit capital — "
+        "even simulated.",
         "research",
         "Open Research Lab",
     ),

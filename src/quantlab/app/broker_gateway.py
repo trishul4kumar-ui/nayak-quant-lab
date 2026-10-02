@@ -20,6 +20,7 @@ from quantlab.broker_gateway.service import (
     list_connections,
     matching_internal_books,
     place_order,
+    profile,
     reconcile,
     snapshot,
 )
@@ -75,8 +76,10 @@ def health_payload() -> dict[str, Any]:
     return status_payload()
 
 
-def connect_payload(scenario: str = "normal") -> dict[str, Any]:
-    return _safe(lambda: _dump(connect(MockScenario(scenario))))
+def connect_payload(scenario: str = "normal", *, adapter: str = "mock") -> dict[str, Any]:
+    if adapter == "kite":
+        return _safe(lambda: _dump(connect(adapter_name="kite")))
+    return _safe(lambda: _dump(connect(MockScenario(scenario), adapter_name="mock")))
 
 
 def disconnect_payload() -> dict[str, Any]:
@@ -86,6 +89,10 @@ def disconnect_payload() -> dict[str, Any]:
 def account_payload() -> dict[str, Any]:
     bundle = last_snapshot() or snapshot()
     return _dump(bundle.account)
+
+
+def profile_payload() -> dict[str, Any]:
+    return _dump(profile())
 
 
 def positions_payload() -> dict[str, Any]:
@@ -116,6 +123,15 @@ def fills_payload() -> dict[str, Any]:
     bundle = last_snapshot() or snapshot()
     return {
         "fills": [_dump(item) for item in bundle.fills],
+        "read_only": True,
+        "live_trading": False,
+    }
+
+
+def trades_payload() -> dict[str, Any]:
+    bundle = last_snapshot() or snapshot()
+    return {
+        "trades": [_dump(item) for item in bundle.trades],
         "read_only": True,
         "live_trading": False,
     }

@@ -149,18 +149,14 @@ def run_monitoring(
     if used.user_benchmark_returns is not None:
         bench = user_benchmark(used.user_benchmark_returns, portfolio_return=port_ret)
     else:
-        bench = equal_weight_universe(
-            snapshot, paper.account, beginning_equity=start_equity
-        )
+        bench = equal_weight_universe(snapshot, paper.account, beginning_equity=start_equity)
     returns = report_returns(
         beginning=start_equity,
         ending=paper.account.equity,
         period_returns=[] if port_ret is None else [port_ret],
         risk_free=used.risk_free_rate,
     )
-    feedback = build_feedback(
-        pnl, attr, factor, drift, concentration=conc, turnover=turn
-    )
+    feedback = build_feedback(pnl, attr, factor, drift, concentration=conc, turnover=turn)
     pnl_breaks = reconcile_pnl(pnl)
     attr_breaks = reconcile_attribution(pnl, attr)
     if "pnl_reconciliation_break" in pnl_breaks:

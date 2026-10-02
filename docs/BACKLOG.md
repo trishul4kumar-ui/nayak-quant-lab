@@ -40,6 +40,11 @@ Prompt 01 + 02 + 03 + 04 (PIT fabric) + 05 (research-grade validation) + 06 (fea
 - [x] Real-time market-data / state gateway (Prompt 29; observe-only mock/replay; not a second fabric)
 - [x] Real-time research-to-decision engine (Prompt 30; TargetPortfolio is not an order)
 - [x] Deterministic shadow validation / replay / digital twin (Prompt 31; zero broker write; not Prompt 24)
+- [x] Read-only broker observations and account reconciliation (Prompts 32–33; no order routing)
+- [x] Production-capable market-data boundary (Prompt 34; provider bridge required; no live feed bundled)
+- [x] Production-shadow evidence and restricted-live eligibility (Prompts 35–36; blocked without verifiable evidence; no broker write)
+- [x] Restricted execution gateway (Prompt 37; immutable human-confirmed envelope, test-only adapter, no production write adapter)
+- [x] Live operations monitoring and incident response (Prompt 38; evidence-first alerts/incidents and safe containment only)
 - [x] Integrity engine PASS/WARN/FAIL/NOT_TESTED
 - [x] Walk-forward splitter (rolling / expanding / anchored)
 - [x] Multiple-testing FDR/FWER available (BH, Bonferroni, Holm)
@@ -104,6 +109,8 @@ Prompt 01 + 02 + 03 + 04 (PIT fabric) + 05 (research-grade validation) + 06 (fea
 - [x] Real-Time Data Lab viewer (observe-only snapshot; RUN SNAPSHOT is local mock; no streams)
 - [x] Real-Time Decision Lab viewer (RUN DECISION is local; no order controls)
 - [x] Digital Twin / Shadow Lab viewer (RUN SHADOW is local; zero broker write)
+- [x] Restricted Execution Console (gateway state only; no broker write adapter)
+- [x] Live Operations Center (health/incident visibility; no automatic resume)
 - [ ] Saved docking layouts
 - [ ] PyInstaller signed installer
 - [ ] Resource monitor

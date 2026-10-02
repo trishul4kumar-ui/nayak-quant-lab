@@ -38,7 +38,10 @@ TEMPLATES: tuple[StrategyTemplate, ...] = (
     StrategyTemplate(
         template_id="blank_hypothesis",
         name="Blank hypothesis",
-        summary="Same momentum engine with your own journal framing — customize the note, not the code yet.",
+        summary=(
+            "Same momentum engine with your own journal framing — "
+            "customize the note, not the code yet."
+        ),
         hypothesis="Describe your idea in the journal after the run.",
         runnable=True,
         lookback=20,

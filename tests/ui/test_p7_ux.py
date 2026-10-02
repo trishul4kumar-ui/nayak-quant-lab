@@ -12,12 +12,11 @@ from PySide6.QtWidgets import QApplication
 
 from quantlab.app.bootstrap import bootstrap
 from quantlab.app.research_pipeline import PipelineStatus, build_research_pipeline
-from quantlab.app.settings_store import ExperienceMode
 from quantlab.app.strategy_templates import TEMPLATES, template_by_id
 from quantlab.app.validation_summary import validation_two_questions
 from quantlab.ui.main_window import MainWindow
 from quantlab.ui.pages.test import BacktestWizardPage
-from quantlab.ui.widgets.charts import DonutChartWidget, KpiCard, TargetBarWidget
+from quantlab.ui.widgets.charts import DonutChartWidget, KpiCard
 from quantlab.ui.widgets.research_pipeline import ResearchPipelineStrip
 
 

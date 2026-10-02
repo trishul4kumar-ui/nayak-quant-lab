@@ -11,6 +11,7 @@ from quantlab.broker_gateway.models import (
     BrokerMarginSnapshot,
     BrokerOrderSnapshot,
     BrokerPositionSnapshot,
+    BrokerProfileSnapshot,
     GatewaySnapshotBundle,
     InstrumentMapping,
     Provenance,
@@ -30,6 +31,9 @@ class VendorReadOnlyContract:
         raise BrokerGatewayError("vendor read-only adapter is not enabled")
 
     def health(self) -> BrokerHealth:
+        raise BrokerGatewayError("vendor read-only adapter is not enabled")
+
+    def profile(self) -> BrokerProfileSnapshot:
         raise BrokerGatewayError("vendor read-only adapter is not enabled")
 
     def account(self) -> BrokerAccountSnapshot:

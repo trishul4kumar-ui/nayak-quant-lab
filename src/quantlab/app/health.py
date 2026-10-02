@@ -443,9 +443,9 @@ def run_health_checks(
         )
 
     try:
-        from quantlab.paper_oms.policy import list_policies
+        from quantlab.paper_oms.policy import list_policies as list_paper_policies
 
-        n_pol = len(list_policies())
+        n_pol = len(list_paper_policies())
         components.append(
             ComponentHealth(
                 name="paper_oms_engine",
@@ -493,8 +493,7 @@ def run_health_checks(
                 name="market_data_engine",
                 status=ComponentStatus.OK,
                 detail=(
-                    "PIT market data, security master, corporate actions; "
-                    "no invented NSE history"
+                    "PIT market data, security master, corporate actions; no invented NSE history"
                 ),
             )
         )

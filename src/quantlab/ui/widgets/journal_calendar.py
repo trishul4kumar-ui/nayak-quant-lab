@@ -34,10 +34,10 @@ class JournalCalendarWidget(QFrame):
         self._entries = list(entries)
         self._by_day.clear()
         for entry in entries:
-            day = entry.run_at[:10] if entry.run_at and len(entry.run_at) >= 10 else ""
-            if not day:
+            run_day = entry.run_at[:10] if entry.run_at and len(entry.run_at) >= 10 else ""
+            if not run_day:
                 continue
-            self._by_day.setdefault(day, []).append(entry)
+            self._by_day.setdefault(run_day, []).append(entry)
         now = datetime.now(tz=UTC)
         self._title.setText(now.strftime("%B %Y"))
         while self._grid.count():
@@ -53,13 +53,13 @@ class JournalCalendarWidget(QFrame):
             self._grid.addWidget(lbl, 0, col)
         year, month = now.year, now.month
         for row_idx, week in enumerate(monthcalendar(year, month), start=1):
-            for col_idx, day in enumerate(week):
-                if day == 0:
+            for col_idx, calendar_day in enumerate(week):
+                if calendar_day == 0:
                     spacer = QLabel("")
                     self._grid.addWidget(spacer, row_idx, col_idx)
                     continue
-                key = f"{year:04d}-{month:02d}-{day:02d}"
-                cell = _DayCell(day, self._by_day.get(key, []))
+                key = f"{year:04d}-{month:02d}-{calendar_day:02d}"
+                cell = _DayCell(calendar_day, self._by_day.get(key, []))
                 cell.clicked.connect(self.day_selected.emit)
                 self._grid.addWidget(cell, row_idx, col_idx)
 
@@ -79,7 +79,8 @@ class _DayCell(QFrame):
             bg = "#252932"
             accent = "#6b7080"
         self.setStyleSheet(
-            f"QFrame#journalDay {{ background: {bg}; border: none; border-radius: 4px; min-height: 36px; }}"
+            f"QFrame#journalDay {{ background: {bg}; border: none; "
+            "border-radius: 4px; min-height: 36px; }"
         )
         if entries:
             self.setCursor(Qt.CursorShape.PointingHandCursor)

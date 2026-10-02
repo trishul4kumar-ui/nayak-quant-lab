@@ -17,9 +17,7 @@ def security_attribution(
     turnover: dict[str, float] = {}
     for fill in fills:
         costs[fill.security_id] = costs.get(fill.security_id, 0.0) + fill.total_cost
-        turnover[fill.security_id] = (
-            turnover.get(fill.security_id, 0.0) + abs(fill.gross_notional)
-        )
+        turnover[fill.security_id] = turnover.get(fill.security_id, 0.0) + abs(fill.gross_notional)
     denom = pnl.beginning_equity if pnl.beginning_equity else 1.0
     rows: list[SecurityContribution] = []
     explained = 0.0
@@ -40,9 +38,7 @@ def security_attribution(
             )
         )
     residual = pnl.pnl_total - explained
-    recon_ok = abs(residual - pnl.residual_pnl) <= 1e-6 + 1e-8 * max(
-        1.0, abs(pnl.pnl_total)
-    )
+    recon_ok = abs(residual - pnl.residual_pnl) <= 1e-6 + 1e-8 * max(1.0, abs(pnl.pnl_total))
     return AttributionResult(
         method=AttributionMethod.EXACT_ACCOUNTING,
         total=pnl.pnl_total,

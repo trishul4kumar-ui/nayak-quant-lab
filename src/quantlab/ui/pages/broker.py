@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QButtonGroup,
     QCheckBox,
@@ -24,7 +23,9 @@ class BrokerPage(LabPageShell):
     def __init__(self, runtime: ApplicationRuntime) -> None:
         super().__init__(
             "Broker Console",
-            subtitle="Configure connectivity for paper or live — research mode stays closed by default.",
+            subtitle=(
+                "Configure connectivity for paper or live — research mode stays closed by default."
+            ),
             nayak_summary=(
                 "This wizard walks through adapter choice and safety gates. "
                 "API keys and passwords are never stored or displayed here. "

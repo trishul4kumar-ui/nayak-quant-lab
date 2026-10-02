@@ -48,9 +48,7 @@ def load_risk_exposures(artifacts_dir: Path, experiment_id: str) -> dict[str, fl
     return out
 
 
-def load_validation_benchmark(
-    artifacts_dir: Path, experiment_id: str
-) -> dict[str, Any] | None:
+def load_validation_benchmark(artifacts_dir: Path, experiment_id: str) -> dict[str, Any] | None:
     path = artifacts_dir / experiment_id / "validation.json"
     if not path.is_file():
         return None
@@ -95,11 +93,7 @@ def equity_chart_series(
 def drawdown_episode_rows(equity: list[float], n: int = 5) -> list[list[str]]:
     rows: list[list[str]] = []
     for episode in top_drawdowns(equity, n):
-        recovery = (
-            "open"
-            if episode.recovery_duration is None
-            else str(episode.recovery_duration)
-        )
+        recovery = "open" if episode.recovery_duration is None else str(episode.recovery_duration)
         rows.append(
             [
                 str(episode.peak_index),

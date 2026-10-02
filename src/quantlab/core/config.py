@@ -10,7 +10,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class LiveSafetyGates(BaseSettings):
-    """Every flag must be true for live orders. Defaults fail closed."""
+    """Every required authorization must pass before live execution. Defaults fail closed."""
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
@@ -30,17 +30,25 @@ class LiveSafetyGates(BaseSettings):
     broker_write_enabled: bool = False
 
     def all_pass(self) -> bool:
-        return all(
-            (
-                self.live_trading,
-                self.live_trading_enabled,
-                self.broker_connected,
-                self.risk_engine_healthy,
-                self.strategy_approved,
-                self.model_approved,
-                self.data_healthy,
-                self.session_valid,
+        return (
+            all(
+                (
+                    self.live_trading,
+                    self.live_trading_enabled,
+                    self.broker_connected,
+                    self.risk_engine_healthy,
+                    self.strategy_approved,
+                    self.model_approved,
+                    self.data_healthy,
+                    self.session_valid,
+                    self.broker_routing_enabled,
+                    self.live_order_submission_enabled,
+                    self.execution_gateway_armed,
+                    self.live_release_authorized,
+                    self.broker_write_enabled,
+                )
             )
+            and not self.shadow_mode
         )
 
     def blocking_reasons(self) -> list[str]:
@@ -53,8 +61,16 @@ class LiveSafetyGates(BaseSettings):
             "model_approved",
             "data_healthy",
             "session_valid",
+            "broker_routing_enabled",
+            "live_order_submission_enabled",
+            "execution_gateway_armed",
+            "live_release_authorized",
+            "broker_write_enabled",
         )
-        return [name for name in names if not getattr(self, name)]
+        reasons = [name for name in names if not getattr(self, name)]
+        if self.shadow_mode:
+            reasons.append("shadow_mode")
+        return reasons
 
 
 class Settings(BaseSettings):

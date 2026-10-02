@@ -15,6 +15,7 @@ from quantlab.realtime_data.service import (
     list_snapshots,
     replay,
     snapshot,
+    source_status,
     start,
     stop,
 )
@@ -61,15 +62,15 @@ def status_payload() -> dict[str, Any]:
 
 def sources_payload() -> dict[str, Any]:
     return {
-        "sources": ["mock-observe-only", "replay-observe-only"],
+        **source_status(),
         "write_enabled": False,
         "live_trading": False,
-        "note": "Production vendor adapters are out of scope.",
+        "note": "Provider bridges are observe-only and must preserve provenance.",
     }
 
 
-def start_payload(scenario: str = "normal") -> dict[str, Any]:
-    return _safe(lambda: _dump(start(scenario)))
+def start_payload(scenario: str = "normal", *, adapter: str | None = None) -> dict[str, Any]:
+    return _safe(lambda: _dump(start(scenario, adapter_name=adapter)))
 
 
 def stop_payload() -> dict[str, Any]:

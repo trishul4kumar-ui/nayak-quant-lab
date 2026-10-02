@@ -21,9 +21,7 @@ def _run_row(result: MonitoringResult, decision: InvestmentDecision) -> Experime
         id=result.run.monitoring_run_id,
         name=f"monitoring:{result.run.methodology_id}",
         hypothesis="Performance is evidence about an observed book, not proof of alpha.",
-        status=ExperimentStatus.PASSED
-        if result.reconciliation_ok
-        else ExperimentStatus.FAILED,
+        status=ExperimentStatus.PASSED if result.reconciliation_ok else ExperimentStatus.FAILED,
         git_commit=git_commit(),
         dataset_version=result.run.snapshot_id,
         universe=sorted(result.exposure),
@@ -77,9 +75,7 @@ def run_monitoring_experiment(
 ) -> tuple[MonitoringResult, ExperimentRun]:
     if paper is None or decision is None or target is None:
         paper, decision, target = seed_paper_result()
-    result = run_monitoring(
-        request, paper=paper, decision=decision, target=target
-    )
+    result = run_monitoring(request, paper=paper, decision=decision, target=target)
     persist()
     row = _run_row(result, decision)
     if append:

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from PySide6.QtWidgets import QLabel, QPushButton, QTableWidget
+from PySide6.QtWidgets import QLabel, QTableWidget
 
 from quantlab.app.bootstrap import ApplicationRuntime
 from quantlab.app.chart_data import load_risk_exposures

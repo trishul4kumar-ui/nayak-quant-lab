@@ -79,9 +79,7 @@ def create(mode: TwinMode | str = TwinMode.DETERMINISM_TEST) -> TwinRun:
         checkpoints=(),
         counterfactual=value is TwinMode.COUNTERFACTUAL,
         extras={
-            "label": "COUNTERFACTUAL / NOT OBSERVED"
-            if value is TwinMode.COUNTERFACTUAL
-            else ""
+            "label": "COUNTERFACTUAL / NOT OBSERVED" if value is TwinMode.COUNTERFACTUAL else ""
         },
     )
     put_run(item)
