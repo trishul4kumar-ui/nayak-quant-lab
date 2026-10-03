@@ -141,3 +141,16 @@ def list_payload() -> list[dict[str, Any]]:
 def run_payload() -> dict[str, Any]:
     start()
     return snapshot_payload()
+
+
+def connect_kite_payload() -> dict[str, Any]:
+    """Configure the read-only Kite source in this local desktop process."""
+    return start_payload("normal", adapter="kite")
+
+
+def capture_kite_snapshot_payload() -> dict[str, Any]:
+    """Fetch one Kite quote snapshot; failures remain visible and never fall back to mock data."""
+    connected = connect_kite_payload()
+    if "error" in connected:
+        return connected
+    return _safe(snapshot_payload)

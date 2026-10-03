@@ -281,6 +281,7 @@ class MockBrokerAdapter:
 
     def snapshot(self) -> GatewaySnapshotBundle:
         prov = self.session_status()
+        capture_started_at = prov.captured_at
         account = self.account()
         positions = self.positions()
         holdings = self.holdings()
@@ -309,6 +310,8 @@ class MockBrokerAdapter:
             trades=fills,
             mappings=mappings,
             payload_hash=digest,
+            capture_started_at=capture_started_at,
+            capture_completed_at=prov.captured_at,
         )
 
     def place_order(self, *_args: object, **_kwargs: object) -> None:

@@ -19,6 +19,7 @@ from quantlab.core.config import LiveSafetyGates, Settings, get_settings
 from quantlab.core.logging import configure_logging
 from quantlab.data.fabric.layout import FabricLayout
 from quantlab.models.registry import ExperimentLedger
+from quantlab.restricted_execution.repository import configure_durable_store
 from quantlab.risk.states import RiskState
 
 
@@ -119,6 +120,7 @@ def bootstrap(*, data_dir: Path | None = None) -> ApplicationRuntime:
     paths = RuntimePaths.discover(override)
     paths.ensure()
     FabricLayout(paths.fabric_dir).ensure()
+    configure_durable_store(paths.database_dir / "control_plane.sqlite")
     logs = LogBuffer(log_file=paths.log_file)
     configure_logging(settings.log_level, sink=logs.append)
     gates = LiveSafetyGates()

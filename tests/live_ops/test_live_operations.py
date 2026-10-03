@@ -8,6 +8,8 @@ from quantlab.live_ops.models import AlertEvent, EscalationPolicy, IncidentEvide
 from quantlab.live_ops.repository import alerts, incidents, reset_for_tests
 from quantlab.live_ops.service import LiveOperationsService
 from quantlab.realtime_data.hashing import sha256
+from quantlab.realtime_data.service import reset_for_tests as reset_market_data
+from quantlab.realtime_data.service import snapshot as market_snapshot
 
 
 def test_collection_deduplicates_alerts_and_keeps_evidence() -> None:
@@ -20,6 +22,16 @@ def test_collection_deduplicates_alerts_and_keeps_evidence() -> None:
     assert alerts()
     assert any(item.occurrence_count == 2 for item in alerts())
     assert incidents()
+
+
+def test_market_data_signal_uses_the_observed_feed_health() -> None:
+    reset_for_tests()
+    reset_market_data()
+    market_snapshot()
+    snapshot = LiveOperationsService().collect(now=datetime(2026, 1, 2, tzinfo=UTC))
+    market = next(item for item in snapshot.signals if item.signal_id == "market-data")
+    assert market.status == "HEALTHY"
+    assert "observed market-data health=HEALTHY" in market.detail
 
 
 def test_critical_response_is_idempotent_and_never_resumes() -> None:

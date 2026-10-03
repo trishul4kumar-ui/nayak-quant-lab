@@ -40,6 +40,28 @@ class ProductionShadowPolicy(BaseModel):
     minimum_sessions: int | None = None
     require_deterministic_replay: bool = True
     require_production_provenance: bool = True
+    replay_max_age_seconds: float = 300.0
+
+
+class DigitalTwinReplayEvidence(BaseModel):
+    """Hash-verifiable replay evidence; its payload cannot be silently rewritten."""
+
+    model_config = ConfigDict(frozen=True)
+
+    source_run_id: str
+    market_snapshot_hash: str
+    decision_hash: str
+    target_portfolio_hash: str
+    order_plan_hash: str
+    simulated_fill_hash: str
+    cash_position_state_hash: str
+    reconciliation_hash: str
+    broker_account_fingerprint: str
+    observed_at: datetime
+    expires_at: datetime
+    evidence_hash: str
+    data_kind: EvidenceLabel = EvidenceLabel.OBSERVED
+    note: str = "Replay evidence is validation evidence, not a broker confirmation."
 
 
 class ShadowCheck(BaseModel):
@@ -91,6 +113,7 @@ class ProductionShadowRun(BaseModel):
     execution_policy_hash: str = ""
     twin_state_hash: str = ""
     reconciliation_hash: str = ""
+    deterministic_replay_hash: str = ""
     policy: ProductionShadowPolicy
     checks: tuple[ShadowCheck, ...]
     incidents: tuple[ProductionShadowIncident, ...] = ()

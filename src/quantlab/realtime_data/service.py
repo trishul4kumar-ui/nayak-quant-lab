@@ -10,6 +10,7 @@ from quantlab.realtime_data.audit import reset_for_tests as reset_audit
 from quantlab.realtime_data.audit import rows as audit_rows
 from quantlab.realtime_data.errors import RealTimeDataError
 from quantlab.realtime_data.freeze import freeze, to_market_states
+from quantlab.realtime_data.kite import KiteMarketDataAdapter
 from quantlab.realtime_data.mock import SEED_AS_OF, MockMarketDataAdapter, seed_observations
 from quantlab.realtime_data.models import (
     FeedHealth,
@@ -59,6 +60,9 @@ def select_adapter(name: str) -> None:
         source = ProductionFeedSource(source_id="production-unconfigured", priority=1)
         set_adapter(ProductionMarketDataAdapter((source,)))
         return
+    if name == "kite":
+        set_adapter(KiteMarketDataAdapter.from_environment())
+        return
     raise RealTimeDataError(f"unknown market-data adapter: {name}")
 
 
@@ -71,9 +75,8 @@ def _adapter() -> MarketDataAdapter:
 
 def _assert_safety() -> LiveSafetyGates:
     gates = LiveSafetyGates()
-    assert gates.live_trading is False
-    assert gates.broker_write_enabled is False
-    assert live_release_blocked() is True
+    if gates.live_trading or gates.broker_write_enabled or not live_release_blocked():
+        raise RealTimeDataError("observe-only feed refuses a live or write-enabled safety state")
     return gates
 
 
@@ -96,7 +99,7 @@ def start(
         transition(FeedState.DISCONNECTED)
     transition(FeedState.CONNECTING)
     adapter.connect()
-    if adapter_name == "production":
+    if adapter_name in {"production", "kite"}:
         transition(FeedState.CONNECTED)
     elif value is MockFeedScenario.DISCONNECT:
         transition(FeedState.DISCONNECTED)
@@ -149,7 +152,12 @@ def snapshot(*, as_of: datetime | None = None) -> RealTimeSnapshot:
     rows = observed or _LAST_OBS or seed_observations()
     when = as_of
     if when is None:
-        when = max((row.event_time for row in rows), default=SEED_AS_OF)
+        timestamp = (
+            (row.processing_time for row in rows)
+            if isinstance(adapter, ProductionMarketDataAdapter)
+            else (row.event_time for row in rows)
+        )
+        when = max(timestamp, default=SEED_AS_OF)
     provenance: dict[str, object] = {"active_source": adapter.source_id}
     source_manifest = "mock-observe-only:v1"
     if isinstance(adapter, ProductionMarketDataAdapter):
@@ -163,7 +171,8 @@ def snapshot(*, as_of: datetime | None = None) -> RealTimeSnapshot:
     )
     put_snapshot(frozen)
     record_audit("snapshot", snapshot_id=frozen.snapshot_id, hash=frozen.snapshot_hash)
-    assert LiveSafetyGates().live_trading is False
+    if LiveSafetyGates().live_trading:
+        raise RealTimeDataError("frozen market snapshot cannot coexist with LIVE_TRADING=true")
     return frozen
 
 
@@ -304,7 +313,12 @@ def _latency(
     if snapshot is None or not snapshot.observations:
         return None, None, None
     row = snapshot.observations[-1]
-    event_to_receive = (row.receive_time - row.event_time).total_seconds() * 1_000.0
+    observed_event_time = row.exchange_time or row.source_time
+    event_to_receive = (
+        (row.receive_time - observed_event_time).total_seconds() * 1_000.0
+        if observed_event_time is not None
+        else None
+    )
     receive_to_process = (row.processing_time - row.receive_time).total_seconds() * 1_000.0
     process_to_snapshot = (snapshot.as_of - row.processing_time).total_seconds() * 1_000.0
     return event_to_receive, receive_to_process, process_to_snapshot

@@ -50,6 +50,7 @@ class ReconciliationTolerances(BaseModel):
     cash_absolute: float = 0.01
     value_absolute: float = 0.01
     timestamp_seconds: float = 5.0
+    max_broker_capture_window_seconds: float = 5.0
 
 
 class InternalPosition(BaseModel):

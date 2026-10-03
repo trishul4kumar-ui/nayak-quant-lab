@@ -66,6 +66,12 @@ _RULES = (
         trigger_statuses=("UNAVAILABLE", "STALE", "UNKNOWN"),
         severity=Severity.HIGH,
     ),
+    AlertRule(
+        rule_id="broker-health",
+        component="broker_gateway",
+        trigger_statuses=("UNAVAILABLE", "STALE", "UNKNOWN"),
+        severity=Severity.HIGH,
+    ),
 )
 
 
@@ -121,6 +127,8 @@ class LiveOperationsService:
         )
 
     def _signals(self, at: datetime) -> tuple[HealthSignal, ...]:
+        from quantlab.broker_gateway.service import health as broker_health
+        from quantlab.realtime_data.service import health as market_data_health
         from quantlab.reconciliation.repository import last as last_reconciliation
         from quantlab.restricted_execution.repository import list_submissions
 
@@ -136,7 +144,8 @@ class LiveOperationsService:
             else "BLOCKED"
         )
         safety = "KILL_ACTIVE" if is_active(KillScope.GLOBAL) else "HEALTHY"
-        data = "UNKNOWN"
+        data, data_detail, data_evidence = _market_data_signal(market_data_health)
+        broker, broker_detail, broker_evidence = _broker_signal(broker_health)
         evidence = (sha256({"at": at.isoformat(), "gates": LiveSafetyGates().model_dump()}),)
         return (
             HealthSignal(
@@ -144,8 +153,16 @@ class LiveOperationsService:
                 component="market_data",
                 status=data,
                 observed_at=at,
-                evidence=evidence,
-                detail="no production market-data health observation",
+                evidence=evidence + data_evidence,
+                detail=data_detail,
+            ),
+            HealthSignal(
+                signal_id="broker-gateway",
+                component="broker_gateway",
+                status=broker,
+                observed_at=at,
+                evidence=evidence + broker_evidence,
+                detail=broker_detail,
             ),
             HealthSignal(
                 signal_id="reconciliation",
@@ -349,3 +366,43 @@ class LiveOperationsService:
                 }
             )
         )
+
+
+def _market_data_signal(probe: object) -> tuple[str, str, tuple[str, ...]]:
+    """Translate an observed feed health probe without inventing a healthy state."""
+    try:
+        result = probe()  # type: ignore[operator]
+    except Exception as exc:
+        return "UNKNOWN", f"market-data health probe failed: {exc}", ()
+    overall = str(getattr(result, "overall", "unknown")).upper()
+    mapping = {
+        "HEALTHY": "HEALTHY",
+        "STALE": "STALE",
+        "DISCONNECTED": "UNAVAILABLE",
+        "HALTED": "UNAVAILABLE",
+        "DEGRADED": "UNAVAILABLE",
+        "RECOVERING": "UNAVAILABLE",
+    }
+    status = mapping.get(overall, "UNKNOWN")
+    return status, f"observed market-data health={overall}", (sha256(result.model_dump()),)
+
+
+def _broker_signal(probe: object) -> tuple[str, str, tuple[str, ...]]:
+    """Translate a read-only broker probe; unavailable is never silently healthy."""
+    try:
+        result = probe()  # type: ignore[operator]
+    except Exception as exc:
+        return "UNKNOWN", f"broker health probe failed: {exc}", ()
+    if bool(getattr(result, "stale", False)):
+        status = "STALE"
+    elif bool(getattr(result, "healthy", False)):
+        status = "HEALTHY"
+    elif str(getattr(result, "state", "")).upper() == "DISCONNECTED":
+        status = "UNAVAILABLE"
+    else:
+        status = "UNKNOWN"
+    return (
+        status,
+        f"observed broker state={getattr(result, 'state', 'unknown')}",
+        (sha256(result.model_dump()),),
+    )

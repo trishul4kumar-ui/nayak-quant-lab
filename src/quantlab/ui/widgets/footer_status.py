@@ -67,7 +67,9 @@ class FooterStatusBar(QStatusBar):
 
     def __init__(self) -> None:
         super().__init__()
+        self.setObjectName("footerStatus")
         self._host = QWidget()
+        self._host.setObjectName("footerStatusHost")
         self._layout = QHBoxLayout(self._host)
         self._layout.setContentsMargins(4, 0, 4, 0)
         self._layout.setSpacing(6)

@@ -27,11 +27,6 @@ def assert_live_trading_disabled(*, live_trading: bool = False) -> LiveSafetyGat
         raise SafetyError("shadow engine refuses to run while live_trading is true")
     if gates.broker_routing_enabled or gates.live_order_submission_enabled:
         raise LiveRouteAttempt("shadow engine refuses broker routing flags")
-    assert live_trading is False
-    assert gates.live_trading is False
-    assert gates.shadow_mode is True
-    assert gates.broker_routing_enabled is False
-    assert gates.live_order_submission_enabled is False
     return gates
 
 

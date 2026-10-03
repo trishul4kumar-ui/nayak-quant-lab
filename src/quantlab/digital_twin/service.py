@@ -52,9 +52,8 @@ def reset_for_tests() -> None:
 
 def _assert_safety() -> LiveSafetyGates:
     gates = LiveSafetyGates()
-    assert gates.live_trading is False
-    assert gates.broker_write_enabled is False
-    assert live_release_blocked() is True
+    if gates.live_trading or gates.broker_write_enabled or not live_release_blocked():
+        raise TwinRoutingError("digital twin refuses a live or write-enabled safety state")
     return gates
 
 

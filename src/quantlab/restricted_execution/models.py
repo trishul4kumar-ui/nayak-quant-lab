@@ -69,6 +69,26 @@ class HumanConfirmation(BaseModel):
     expires_at: datetime
 
 
+class ExecutionValidationContext(BaseModel):
+    """Fresh, read-only control-plane evidence required immediately before submit."""
+
+    model_config = ConfigDict(frozen=True)
+
+    market_price: float | None = None
+    market_data_healthy: bool = False
+    broker_snapshot_fresh: bool = False
+    reconciliation_acceptable: bool = False
+    release_valid: bool = False
+    authorization_evidence_fresh: bool = False
+    account_equity: float | None = None
+    available_cash: float | None = None
+    available_margin: float | None = None
+    current_gross_exposure: float | None = None
+    projected_turnover: float | None = None
+    observed_at: datetime | None = None
+    note: str = "Unknown control-plane state blocks restricted execution."
+
+
 class GatewaySubmission(BaseModel):
     model_config = ConfigDict(frozen=True)
 

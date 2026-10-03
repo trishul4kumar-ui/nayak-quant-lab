@@ -462,10 +462,15 @@ def _is_stale(
     internal: InternalAccountSnapshot,
     policy: ReconciliationTolerances,
 ) -> bool:
-    return (
+    timestamp_mismatch = (
         abs((broker.provenance.source_timestamp - internal.observed_at).total_seconds())
         > policy.timestamp_seconds
     )
+    capture_window = broker.capture_window_seconds
+    capture_too_wide = (
+        capture_window is None or capture_window > policy.max_broker_capture_window_seconds
+    )
+    return timestamp_mismatch or capture_too_wide
 
 
 def _observed_at(

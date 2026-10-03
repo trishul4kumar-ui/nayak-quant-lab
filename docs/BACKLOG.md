@@ -1,6 +1,9 @@
 # QUANT LAB — next-step backlog
 
-Prompt 01 + 02 + 03 + 04 (PIT fabric) + 05 (research-grade validation) + 06 (feature & alpha engine) + 07 (cross-sectional portfolio construction) + 08 (quantitative risk & factor research) + 09 (market regime, state & temporal dynamics) + 10 (adaptive alpha & online learning) + 11 (statistical learning & model research) + 12 (advanced ensemble, meta-alpha & model combination) + 13 (execution research / microstructure simulation) + 14 (research orchestration / control plane) + 15 (alpha discovery / genetic-symbolic search) + 16 (knowledge graph / research memory) + 17 (capital allocation / investment decision engine) + 18 (institutional paper OMS) + **19 (portfolio monitoring / attribution)** + **20 (production market data)** + **21 (TCA / calibration / capacity)** + **22 (econometric / causal research)** + **23 (model-risk validation / pre-live certification)** + **24 (production paper / shadow execution)** + **25 (live-trading safety gateway)** + **26 (production operational control plane)** + **27 (live-trading certification / promotion / release gate)** + **28 (broker abstraction / account reconciliation gateway)** + **29 (real-time market data / state gateway)** + **30 (real-time research-to-decision engine)** + **31 (deterministic shadow validation / replay / digital twin)**.
+Prompts 01–38 are implemented as a research/pre-live architecture. Completion markers below
+mean the software boundary exists; they never imply licensed data, live-market configuration,
+profitability, certification, or permission to route broker orders. Current hardening gaps are
+tracked in `docs/audits/QUANT_LAB_PROMPT_01_38_REMAINING_RISKS.md`.
 
 ## Phase 3 — Data fabric
 - [x] Parquet store + dataset versioning (DuckDB PIT queries, SQLite catalog)

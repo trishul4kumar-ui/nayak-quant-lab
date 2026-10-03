@@ -16,7 +16,7 @@ class NotificationStrip(QFrame):
     ) -> None:
         super().__init__(parent)
         self._on_dismiss = on_dismiss
-        self.setObjectName("nayakTip")
+        self.setObjectName("notificationStrip")
         self.setVisible(False)
         row = QHBoxLayout(self)
         row.setContentsMargins(10, 8, 10, 8)

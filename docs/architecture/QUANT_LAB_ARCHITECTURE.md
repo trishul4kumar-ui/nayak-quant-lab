@@ -1,6 +1,6 @@
 # QUANT LAB Architecture
 
-**Status:** accepted (Prompts 19–24: ADR-033 … ADR-038)  
+**Status:** accepted, reconciled through Prompts 01–38
 **Code root:** `src/quantlab` (see ADR-001)
 
 ## System context
@@ -59,6 +59,12 @@ QUANT LAB is a local-first research and (later) execution OS for Indian cash and
 | `realtime_data` | Observe-only real-time market-data gateway (not a second fabric, not a broker) | core, domain, data.fabric.calendar, research.integrity |
 | `realtime_decision` | Production-time decision cycle; TargetPortfolio is terminal (not an OMS) | core, domain, capital.definitions, realtime_data, research.integrity |
 | `digital_twin` | Deterministic shadow/replay twin (not Prompt 24, not a broker) | core, domain, realtime_data, realtime_decision, research.integrity |
+| `reconciliation` | Read-only comparison of internal and broker-account evidence | core, domain, broker_gateway, research.integrity |
+| `production_shadow` | Hash-verifies shadow and digital-twin evidence; never routes | core, domain, realtime_data, realtime_decision, digital_twin, reconciliation |
+| `execution_authorization` | Hash-bound, time-bounded human authorization eligibility; never sizes | core, domain, production_shadow, release, reconciliation |
+| `restricted_execution` | One-attempt state machine for an already approved intent; production adapter is disabled | core, domain, execution_authorization, safety |
+| `live_ops` | Observes health, evidence, alerts, and incidents; never creates trading decisions | core, domain, safety, reconciliation, restricted_execution |
+| `control_plane` | SQLite WAL append-only persistence primitive for control-plane evidence | core |
 | `research` | Genome, momentum strategy, validation suite, gate | core, domain, data |
 | `models` | Experiment ledger + Predictor protocol | core, domain |
 | `portfolio` | Signal → target positions; CS constructors | core, domain, features, alpha, backtest (experiment only) |
@@ -69,7 +75,9 @@ QUANT LAB is a local-first research and (later) execution OS for Indian cash and
 | `ai` | Permissions only (Day 1) | core |
 | `observability` | Structured logs, audit sink | core |
 
-**Forbidden:** `research` → `brokers`; `ai` → `execution.submit` for live; API routes containing sizing logic.
+**Forbidden:** `research` → broker-write boundaries; `ai` → restricted execution submission;
+`production_shadow` → routing; `execution_authorization` → sizing; `restricted_execution` →
+research/portfolio decisions; `live_ops` → trading decisions. API routes must not contain sizing logic.
 
 ## Data flow
 
@@ -173,6 +181,10 @@ Prompt 02 target architecture: [`QUANT_LAB_TARGET_ARCHITECTURE_v0.2.md`](QUANT_L
 
 ## Promotion path
 
-`RESEARCH → BACKTEST → WALK-FORWARD / ROBUSTNESS / STATISTICS → RESEARCH CANDIDATE → PAPER → SHADOW → LIVE`
+`RESEARCH → BACKTEST → WALK-FORWARD / ROBUSTNESS / STATISTICS → RESEARCH CANDIDATE → PAPER → SHADOW → PRE-LIVE VALIDATION → STOP`
 
-The codebase is on **RESEARCH/BACKTEST/PAPER/SHADOW**. The live-trading safety gateway (Prompt 25), ops control plane (Prompt 26), live-certification gate (Prompt 27), and read-only broker gateway (Prompt 28) are present; live vendor adapters and live order routing are not implemented. `LIVE_TRADING` remains false. `BROKER_WRITE_ENABLED` remains false.
+The codebase is on **RESEARCH/BACKTEST/PAPER/SHADOW/PRE-LIVE VALIDATION**. Read-only broker
+observation, deterministic replay evidence, authorization, restricted test-only submission,
+and operations monitoring are present. Production market data is not configured by default.
+Live vendor routing and production broker order placement are not implemented. `LIVE_TRADING`
+remains false and `BROKER_WRITE_ENABLED` remains false.

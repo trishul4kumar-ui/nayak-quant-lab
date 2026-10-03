@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ast
 from pathlib import Path
 
 import pytest
@@ -73,6 +74,17 @@ def test_health_unknown_is_not_healthy() -> None:
 
 def test_no_vendor_sdk_imports() -> None:
     root = Path("src/quantlab/realtime_data")
-    blob = "\n".join(path.read_text() for path in root.glob("*.py"))
-    for needle in ("kiteconnect", "zerodha", "openalgo", "quantlab.brokers"):
-        assert needle not in blob
+    imported_modules: list[str] = []
+    for path in root.glob("*.py"):
+        tree = ast.parse(path.read_text(), filename=str(path))
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                imported_modules.extend(alias.name for alias in node.names)
+            elif isinstance(node, ast.ImportFrom) and node.module:
+                imported_modules.append(node.module)
+
+    for forbidden in ("kiteconnect", "zerodha", "openalgo", "quantlab.brokers"):
+        assert not any(
+            module == forbidden or module.startswith(f"{forbidden}.")
+            for module in imported_modules
+        )

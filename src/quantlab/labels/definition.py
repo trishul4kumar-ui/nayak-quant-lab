@@ -6,6 +6,8 @@ from enum import StrEnum
 
 from pydantic import BaseModel
 
+from quantlab.core.errors import ModelError
+
 
 class LabelKind(StrEnum):
     FORWARD_RETURN = "forward_return"
@@ -79,3 +81,21 @@ def forward_binary_direction(horizon: int) -> LabelDefinition:
         horizon=horizon,
         mathematical_definition=f"1 if P(T+{horizon})/P(T)-1 > 0 else 0",
     )
+
+
+def resolve_label(label_id: str) -> LabelDefinition:
+    """Resolve a declared model target; do not silently substitute another label."""
+    prefix, separator, horizon_text = label_id.rpartition("_")
+    if not separator or not horizon_text.isdigit() or int(horizon_text) < 1:
+        raise ModelError(f"unsupported target label {label_id!r}")
+    horizon = int(horizon_text)
+    registry = {
+        "forward_return": forward_return,
+        "forward_volatility": forward_volatility,
+        "forward_drawdown": forward_drawdown,
+        "forward_binary_direction": forward_binary_direction,
+    }
+    factory = registry.get(prefix)
+    if factory is None:
+        raise ModelError(f"unsupported target label {label_id!r}")
+    return factory(horizon)

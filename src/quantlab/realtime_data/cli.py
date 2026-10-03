@@ -22,6 +22,8 @@ from quantlab.app.realtime_data import (
     status_payload,
     stop_payload,
 )
+from quantlab.realtime_data.errors import RealTimeDataError
+from quantlab.realtime_data.kite_auth import authenticate_locally
 
 
 def add_realtime_parser(sub: Any) -> None:
@@ -50,7 +52,11 @@ def add_market_data_parser(sub: Any) -> None:
     parser = sub.add_parser("market-data", help="production-capable observe-only market data")
     cmd = parser.add_subparsers(dest="market_data_cmd", required=True)
     connect = cmd.add_parser("connect", help="connect configured production adapter")
-    connect.add_argument("--adapter", choices=("production", "mock"), default="production")
+    connect.add_argument("--adapter", choices=("kite", "production", "mock"), default="production")
+    cmd.add_parser(
+        "kite-login",
+        help="open local Kite login and store a read-only access token",
+    )
     for name in (
         "disconnect",
         "status",
@@ -64,7 +70,9 @@ def add_market_data_parser(sub: Any) -> None:
         "audit",
         "replay",
     ):
-        cmd.add_parser(name, help=f"market-data {name}")
+        item = cmd.add_parser(name, help=f"market-data {name}")
+        if name == "snapshot":
+            item.add_argument("--adapter", choices=("kite", "production", "mock"), default=None)
 
 
 def add_research_realtime_parsers(research_sub: Any) -> None:
@@ -106,8 +114,24 @@ def run_realtime_command(args: Any) -> int:
 
 def run_market_data_command(args: Any) -> int:
     command = args.market_data_cmd
-    if command == "connect":
-        payload: Any = start_payload("normal", adapter=getattr(args, "adapter", "production"))
+    if command == "kite-login":
+        try:
+            result = authenticate_locally()
+            payload: Any = {
+                "authenticated": True,
+                "access_token_stored": True,
+                "dotenv_path": str(result.dotenv_path),
+                "live_trading": False,
+                "observe_only": True,
+            }
+        except RealTimeDataError as exc:
+            payload = {
+                "error": str(exc),
+                "live_trading": False,
+                "observe_only": True,
+            }
+    elif command == "connect":
+        payload = start_payload("normal", adapter=getattr(args, "adapter", "production"))
     elif command == "disconnect":
         payload = stop_payload()
     elif command == "status":
@@ -130,7 +154,12 @@ def run_market_data_command(args: Any) -> int:
         frozen = inspect_payload("last")
         payload = {"instruments": [row["security_id"] for row in frozen.get("observations", [])]}
     elif command == "snapshot":
-        payload = snapshot_payload()
+        adapter = getattr(args, "adapter", None)
+        if adapter is not None:
+            started = start_payload("normal", adapter=adapter)
+            payload = started if "error" in started else snapshot_payload()
+        else:
+            payload = snapshot_payload()
     elif command == "audit":
         payload = audit_payload()
     else:

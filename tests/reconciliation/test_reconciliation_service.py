@@ -73,6 +73,21 @@ def test_stale_snapshots_never_become_match() -> None:
     assert report.status is ReconciliationStatus.STALE
 
 
+def test_wide_broker_capture_window_is_not_an_atomic_reconciliation_snapshot() -> None:
+    broker = MockBrokerAdapter().snapshot()
+    broker = broker.model_copy(
+        update={
+            "capture_started_at": broker.provenance.source_timestamp,
+            "capture_completed_at": broker.provenance.source_timestamp + timedelta(seconds=6),
+        }
+    )
+    internal = internal_from_books(
+        matching_internal_books(), observed_at=broker.provenance.source_timestamp
+    )
+    report = reconcile(broker, internal, tolerances=ReconciliationTolerances())
+    assert report.status is ReconciliationStatus.STALE
+
+
 def test_reconciliation_has_no_broker_write_path() -> None:
     root = Path("src/quantlab/reconciliation")
     source = "\n".join(item.read_text() for item in root.glob("*.py"))

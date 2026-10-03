@@ -50,6 +50,10 @@ def fill_table(
     table.setAlternatingRowColors(False)
     table.setShowGrid(False)
     table.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+    header = table.horizontalHeader()
+    header.setSectionsMovable(True)
+    header.setStretchLastSection(True)
+    header.setDefaultSectionSize(max(header.defaultSectionSize(), 120))
 
     for r, row in enumerate(rows):
         for c, cell in enumerate(row):

@@ -10,6 +10,7 @@ from PySide6.QtWidgets import (
     QListWidget,
     QListWidgetItem,
     QPushButton,
+    QSplitter,
     QVBoxLayout,
     QWidget,
 )
@@ -35,6 +36,7 @@ class HomePage(QWidget):
         on_nav: Callable[[str], None] | None = None,
     ) -> None:
         super().__init__()
+        self.setObjectName("homeWorkspace")
         self._runtime = runtime
         self._assistant = NayakAssistant(runtime)
         self._on_action = on_action
@@ -65,8 +67,8 @@ class HomePage(QWidget):
         self._nudge_row.addWidget(self._nudge_action)
         root.addLayout(self._nudge_row)
 
-        pipe_label = QLabel("Research pipeline")
-        pipe_label.setStyleSheet("font-weight: 600; font-size: 13px;")
+        pipe_label = QLabel("RESEARCH CONTROL PLANE")
+        pipe_label.setObjectName("sectionEyebrow")
         root.addWidget(pipe_label)
         self._pipeline = ResearchPipelineStrip(on_nav=self._on_nav)
         root.addWidget(self._pipeline)
@@ -120,8 +122,8 @@ class HomePage(QWidget):
         focus_layout.addWidget(self._focus_btn, alignment=Qt.AlignmentFlag.AlignLeft)
         root.addWidget(self._focus_frame)
 
-        dash_title = QLabel("Lab dashboard")
-        dash_title.setStyleSheet("font-weight: 600;")
+        dash_title = QLabel("TELEMETRY SNAPSHOT")
+        dash_title.setObjectName("sectionEyebrow")
         dash_row = QHBoxLayout()
         dash_row.addWidget(dash_title)
         self._data_kind_host = QHBoxLayout()
@@ -134,7 +136,7 @@ class HomePage(QWidget):
         curve_row = QHBoxLayout()
         curve_col = QVBoxLayout()
         curve_label = QLabel("Latest equity curve")
-        curve_label.setStyleSheet("font-size: 12px; color: #9aa1ad;")
+        curve_label.setObjectName("chartLabel")
         self._equity_spark = SparklineWidget(min_height=100)
         self._equity_spark.set_empty_message("Run a backtest — your equity curve appears here")
         curve_col.addWidget(curve_label)
@@ -142,13 +144,14 @@ class HomePage(QWidget):
         curve_row.addLayout(curve_col, 1)
         root.addLayout(curve_row)
 
-        mid = QHBoxLayout()
-        mid.setSpacing(16)
-
-        journal_wrap = QVBoxLayout()
+        self._lower_splitter = QSplitter(Qt.Orientation.Horizontal)
+        self._lower_splitter.setObjectName("homeWorkspaceSplitter")
+        self._lower_splitter.setChildrenCollapsible(False)
+        self._lower_splitter.setHandleWidth(8)
+        self._lower_splitter.setOpaqueResize(True)
         journal_header = QHBoxLayout()
-        journal_title = QLabel("Lab journal")
-        journal_title.setStyleSheet("font-weight: 600;")
+        journal_title = QLabel("EVIDENCE JOURNAL")
+        journal_title.setObjectName("sectionEyebrow")
         journal_header.addWidget(journal_title)
         journal_header.addStretch()
         self._journal_open = QPushButton("Open journal →")
@@ -163,12 +166,18 @@ class HomePage(QWidget):
         journal_inner.setContentsMargins(16, 16, 16, 16)
         journal_inner.addLayout(journal_header)
         journal_inner.addWidget(self._journal_list)
-        journal_wrap.addWidget(journal_frame)
-
         self._pulse = PulsePanel(on_nav=self._on_nav)
-        mid.addLayout(journal_wrap, 3)
-        mid.addWidget(self._pulse, 2)
-        root.addLayout(mid)
+        self._lower_splitter.addWidget(journal_frame)
+        self._lower_splitter.addWidget(self._pulse)
+        self._lower_splitter.handle(1).setToolTip("Drag to resize journal and system pulse")
+        home_layout = runtime.ui_settings.current.terminal_layouts.get("workspace:home", {})
+        sizes = home_layout.get("lower")
+        if sizes and len(sizes) == self._lower_splitter.count():
+            self._lower_splitter.setSizes(sizes)
+        else:
+            self._lower_splitter.setSizes([3, 2])
+        self._lower_splitter.splitterMoved.connect(self._persist_lower_layout)
+        root.addWidget(self._lower_splitter, 1)
 
         self._synthetic_note = QLabel(SYNTHETIC_SHARPE_DISCLAIMER)
         self._synthetic_note.setObjectName("nayakVoice")
@@ -176,6 +185,13 @@ class HomePage(QWidget):
         root.addWidget(self._synthetic_note)
         root.addStretch()
         self.refresh()
+
+    def _persist_lower_layout(self, *_args: object) -> None:
+        layouts = self._runtime.ui_settings.current.terminal_layouts
+        payload = dict(layouts.get("workspace:home", {}))
+        payload["lower"] = self._lower_splitter.sizes()
+        layouts["workspace:home"] = payload
+        self._runtime.ui_settings.save()
 
     def _set_data_kind_badge(self, data_kind: str | None) -> None:
         while self._data_kind_host.count():

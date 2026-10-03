@@ -15,6 +15,7 @@ from quantlab.release.service import (
     default_passing_request,
     evaluate,
     expire,
+    last_result,
     revoke,
 )
 from quantlab.release.state import CertState, current, force
@@ -105,6 +106,8 @@ def test_release_eligible_is_not_live() -> None:
     assert result.live_enabled is False
     assert result.manifest is not None
     assert result.manifest.live_enabled is False
+    assert last_result() == result
+    assert result.blocked is False
 
 
 def test_material_mutation_blocks() -> None:

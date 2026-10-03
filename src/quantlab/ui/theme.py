@@ -1,5 +1,7 @@
 """Desktop visual language — dark and light themes."""
 
+# ruff: noqa: E501
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -18,10 +20,10 @@ class ChartPalette:
 
 
 _CHART_PALETTE = ChartPalette(
-    background="#1c1f26",
-    muted="#6b7080",
-    grid="#353945",
-    foreground="#e8eaed",
+    background="#091725",
+    muted="#7f9ab1",
+    grid="#1b3b52",
+    foreground="#eaf7ff",
 )
 
 _ACTIVE_UI_THEME = UiTheme.DARK
@@ -46,10 +48,10 @@ def _set_chart_palette(theme: UiTheme) -> None:
         )
     else:
         _CHART_PALETTE = ChartPalette(
-            background="#1c1f26",
-            muted="#6b7080",
-            grid="#353945",
-            foreground="#e8eaed",
+            background="#091725",
+            muted="#7f9ab1",
+            grid="#1b3b52",
+            foreground="#eaf7ff",
         )
 
 
@@ -411,6 +413,224 @@ QPlainTextEdit#log-view {
     background: #252932;
     border: none;
 }
+
+/* Shadow Operations glass system.  The translucent layers are intentionally
+   restrained: research evidence and disabled-live state stay legible first. */
+QMainWindow, QDialog, QWidget#mainRoot {
+    background: #06111d;
+}
+QLabel {
+    background: transparent;
+}
+QMenuBar {
+    background: #081725;
+    border-bottom: 1px solid rgba(112, 207, 255, 24);
+    color: #b8d1e4;
+}
+QMenuBar::item:selected, QMenu::item:selected {
+    background: rgba(20, 154, 212, 70);
+}
+QMenu {
+    background: #0b1c2a;
+    border: 1px solid rgba(112, 207, 255, 46);
+    color: #eaf7ff;
+}
+QWidget#topBar {
+    background: rgba(9, 27, 42, 232);
+    border-bottom: 1px solid rgba(105, 209, 255, 42);
+}
+QLabel#brand {
+    color: #dff7ff;
+    font-size: 15px;
+    font-weight: 700;
+    letter-spacing: 1.5px;
+}
+QLabel#brandMeta, QLabel#sectionEyebrow {
+    color: #57c9f6;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 1.2px;
+}
+QLabel#versionTag {
+    color: #6f8ea6;
+    font-family: "SF Mono", Menlo, Monaco, monospace;
+    font-size: 11px;
+}
+QLineEdit#commandSearch {
+    background: rgba(16, 44, 64, 196);
+    border: 1px solid rgba(111, 208, 255, 58);
+    border-radius: 9px;
+    color: #eaf7ff;
+    min-width: 300px;
+    padding: 7px 12px;
+}
+QLineEdit#commandSearch:focus {
+    border: 1px solid #43c7f4;
+    outline: none;
+}
+QLabel#safetyRibbon {
+    background: rgba(71, 49, 18, 235);
+    border-bottom: 1px solid rgba(255, 190, 81, 105);
+    color: #ffd78c;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: .7px;
+    padding: 7px 12px;
+}
+QWidget#navHost, QWidget#navHostLive {
+    background: rgba(8, 25, 39, 224);
+    border-right: 1px solid rgba(108, 201, 247, 34);
+    padding: 8px 4px 8px 4px;
+}
+QWidget#navHostLive { background: rgba(61, 25, 29, 230); }
+QListWidget, QListWidget#nav-list {
+    background: transparent;
+}
+QListWidget#nav-list::item {
+    color: #8faabd;
+    border-left: 2px solid transparent;
+    border-radius: 6px;
+    margin: 1px 5px;
+    padding: 7px 9px;
+}
+QListWidget#nav-list::item:hover {
+    background: rgba(43, 128, 172, 47);
+    color: #eaf7ff;
+}
+QListWidget#nav-list::item:selected {
+    background: rgba(32, 139, 190, 82);
+    border-left: 2px solid #4bd4ff;
+    color: #f4fbff;
+}
+QLineEdit#navSearch {
+    background: rgba(16, 44, 64, 176);
+    border: 1px solid rgba(111, 208, 255, 44);
+    border-radius: 7px;
+    color: #eaf7ff;
+}
+QPushButton#navToggle {
+    background: rgba(25, 69, 94, 160);
+    color: #85dfff;
+    border: 1px solid rgba(109, 210, 255, 45);
+    border-radius: 6px;
+}
+QWidget#pageDeck, QScrollArea#pageScroll {
+    background: #06111d;
+}
+QWidget#labShell, QWidget#homeWorkspace {
+    background: transparent;
+}
+QLabel#pageTitle, QLabel#tkGreeting {
+    color: #f1fbff;
+    font-weight: 700;
+}
+QLabel#pageSubtitle, QLabel#nayakVoice, QLabel#chartLabel {
+    color: #91aabd;
+}
+QFrame#card, QFrame#kpiCard, QFrame#focusCard, QFrame#pulseCard,
+QFrame#journalCard, QFrame#terminalPanel, QFrame#nayakTip,
+QFrame#emptyState, QFrame#learnCard, QFrame#runningBanner,
+QWidget#contextHost, QFrame#notificationStrip {
+    background: rgba(14, 37, 55, 216);
+    border: 1px solid rgba(111, 208, 255, 34);
+    border-radius: 10px;
+}
+QFrame#journalCard, QListWidget#journalList {
+    background: rgba(17, 41, 58, 220);
+}
+QFrame#runningBanner {
+    background: rgba(17, 52, 74, 230);
+    border: 1px solid rgba(76, 198, 241, 88);
+}
+QLabel#contextStrip {
+    background: transparent;
+    color: #8bdfff;
+    padding: 6px 8px;
+}
+QPushButton {
+    background: rgba(31, 73, 97, 225);
+    border: 1px solid rgba(122, 213, 255, 42);
+    border-radius: 7px;
+    color: #dceef7;
+    font-weight: 600;
+    padding: 7px 12px;
+}
+QPushButton:hover {
+    background: rgba(43, 112, 147, 235);
+    border-color: rgba(111, 218, 255, 112);
+}
+QPushButton#primary {
+    background: #087fb1;
+    border: 1px solid #43c7f4;
+    color: #f5fcff;
+}
+QPushButton#primary:hover { background: #0998ce; }
+QPushButton#modeToggle:checked {
+    background: rgba(24, 127, 175, 235);
+    border: 1px solid #4bd4ff;
+    color: #f5fcff;
+}
+QLabel#modeBadge {
+    background: rgba(15, 76, 102, 218);
+    border: 1px solid rgba(86, 211, 255, 86);
+    border-radius: 7px;
+    color: #a9ebff;
+}
+QLabel#modeBadgeLive, QLabel#liveBanner {
+    background: #7a292f;
+    border: 1px solid #f0646c;
+    border-radius: 7px;
+    color: #ffecef;
+}
+QLineEdit, QSpinBox, QDoubleSpinBox, QPlainTextEdit, QComboBox {
+    background: rgba(11, 33, 49, 235);
+    border: 1px solid rgba(111, 208, 255, 42);
+    border-radius: 7px;
+    color: #eaf7ff;
+}
+QTableWidget {
+    background: rgba(8, 24, 37, 190);
+    alternate-background-color: rgba(17, 44, 62, 144);
+    selection-background-color: rgba(35, 139, 190, 105);
+    color: #dcecf6;
+    border: 1px solid rgba(111, 208, 255, 28);
+    border-radius: 9px;
+}
+QHeaderView::section {
+    background: rgba(19, 52, 72, 238);
+    color: #93b8cc;
+    border: none;
+    border-bottom: 1px solid rgba(111, 208, 255, 34);
+    padding: 8px;
+    font-size: 11px;
+    font-weight: 700;
+}
+QTabBar::tab {
+    background: rgba(15, 43, 60, 196);
+    border: 1px solid rgba(111, 208, 255, 28);
+    border-radius: 6px;
+    color: #8faabd;
+    margin-right: 4px;
+}
+QTabBar::tab:selected {
+    background: rgba(27, 113, 153, 178);
+    color: #f3fbff;
+}
+QStatusBar, QStatusBar QWidget#footerStatusHost {
+    background: #071522;
+    border-top: 1px solid rgba(111, 208, 255, 28);
+    color: #86a4b6;
+}
+QScrollBar:vertical { background: transparent; width: 10px; }
+QScrollBar::handle:vertical { background: rgba(86, 140, 170, 110); border-radius: 5px; min-height: 28px; }
+QScrollBar::handle:vertical:hover { background: #3aaed7; }
+QSplitter::handle { background: rgba(48, 127, 166, 128); }
+QSplitter::handle:hover { background: #44c9f4; }
+QSplitter::handle:horizontal { width: 8px; margin: 4px 0; }
+QSplitter::handle:vertical { height: 8px; margin: 0 4px; }
+QPushButton#panelFocus { min-width: 58px; padding: 3px 7px; font-size: 11px; }
+QPushButton#panelFocus:checked { background: rgba(41, 149, 198, 235); border-color: #4bd4ff; }
+QPushButton:disabled { background: rgba(25, 45, 59, 190); border-color: rgba(111, 208, 255, 18); color: #5c7789; }
 """
 
 LIGHT_STYLESHEET = """
@@ -755,6 +975,83 @@ QPlainTextEdit#log-view {
     background: #ffffff;
     border: none;
 }
+
+/* Light mode keeps the same control-plane hierarchy with frosted, high-contrast panels. */
+QMainWindow, QDialog, QWidget#mainRoot, QWidget#pageDeck, QScrollArea#pageScroll {
+    background: #edf5f9;
+}
+QLabel {
+    background: transparent;
+}
+QMenuBar {
+    background: #f5fbff;
+    border-bottom: 1px solid rgba(37, 118, 156, 45);
+}
+QWidget#topBar {
+    background: rgba(250, 254, 255, 240);
+    border-bottom: 1px solid rgba(39, 132, 175, 54);
+}
+QLabel#brand { color: #07334a; font-weight: 700; }
+QLabel#brandMeta, QLabel#sectionEyebrow { color: #087ba8; font-size: 10px; font-weight: 700; letter-spacing: 1.2px; }
+QLabel#versionTag { color: #597688; font-family: "SF Mono", Menlo, Monaco, monospace; font-size: 11px; }
+QLineEdit#commandSearch {
+    background: rgba(237, 248, 253, 230);
+    border: 1px solid rgba(29, 126, 170, 68);
+    border-radius: 9px;
+    min-width: 300px;
+    padding: 7px 12px;
+}
+QLabel#safetyRibbon {
+    background: rgba(255, 244, 215, 246);
+    border-bottom: 1px solid rgba(177, 115, 0, 86);
+    color: #805800;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: .7px;
+    padding: 7px 12px;
+}
+QWidget#navHost, QWidget#navHostLive {
+    background: rgba(247, 252, 255, 228);
+    border-right: 1px solid rgba(37, 118, 156, 42);
+    padding: 8px 4px 8px 4px;
+}
+QWidget#navHostLive { background: rgba(255, 241, 241, 235); }
+QListWidget, QListWidget#nav-list { background: transparent; }
+QListWidget#nav-list::item { border-left: 2px solid transparent; border-radius: 6px; margin: 1px 5px; padding: 7px 9px; }
+QListWidget#nav-list::item:hover { background: rgba(47, 151, 196, 30); }
+QListWidget#nav-list::item:selected { background: rgba(34, 145, 195, 68); border-left: 2px solid #078fcb; }
+QLineEdit#navSearch { background: rgba(236, 248, 254, 220); border: 1px solid rgba(37, 126, 170, 48); border-radius: 7px; }
+QWidget#labShell, QWidget#homeWorkspace { background: transparent; }
+QLabel#pageTitle, QLabel#tkGreeting { color: #082e43; font-weight: 700; }
+QLabel#pageSubtitle, QLabel#nayakVoice, QLabel#chartLabel { color: #526d7c; }
+QFrame#card, QFrame#kpiCard, QFrame#focusCard, QFrame#pulseCard,
+QFrame#journalCard, QFrame#terminalPanel, QFrame#nayakTip,
+QFrame#emptyState, QFrame#learnCard, QFrame#runningBanner,
+QWidget#contextHost, QFrame#notificationStrip {
+    background: rgba(255, 255, 255, 222);
+    border: 1px solid rgba(37, 118, 156, 40);
+    border-radius: 10px;
+}
+QFrame#journalCard, QListWidget#journalList { background: rgba(248, 253, 255, 232); }
+QPushButton { background: rgba(231, 244, 250, 235); border: 1px solid rgba(37, 126, 170, 48); border-radius: 7px; color: #16435a; font-weight: 600; padding: 7px 12px; }
+QPushButton:hover { background: rgba(205, 235, 247, 245); border-color: rgba(23, 139, 190, 104); }
+QPushButton#primary { background: #087fab; border: 1px solid #087fab; color: #ffffff; }
+QPushButton#primary:hover { background: #0694c7; }
+QPushButton#modeToggle:checked { background: rgba(30, 141, 191, 120); border: 1px solid #087fab; }
+QLabel#modeBadge { background: rgba(217, 242, 251, 238); border: 1px solid rgba(20, 135, 183, 72); border-radius: 7px; color: #075274; }
+QLabel#modeBadgeLive, QLabel#liveBanner { background: #a43a43; border: 1px solid #c9545d; border-radius: 7px; color: #fff6f6; }
+QTableWidget { background: rgba(255, 255, 255, 205); alternate-background-color: rgba(232, 246, 252, 160); selection-background-color: rgba(69, 172, 214, 100); border: 1px solid rgba(37, 118, 156, 34); border-radius: 9px; }
+QHeaderView::section { background: rgba(229, 245, 252, 240); color: #4b7286; border: none; border-bottom: 1px solid rgba(37, 118, 156, 36); padding: 8px; font-size: 11px; font-weight: 700; }
+QTabBar::tab { background: rgba(231, 245, 251, 220); border: 1px solid rgba(37, 118, 156, 32); border-radius: 6px; margin-right: 4px; }
+QTabBar::tab:selected { background: rgba(137, 213, 241, 154); color: #063a55; }
+QStatusBar, QStatusBar QWidget#footerStatusHost { background: #f4fbff; border-top: 1px solid rgba(37, 118, 156, 30); }
+QSplitter::handle { background: rgba(72, 153, 190, 105); }
+QSplitter::handle:hover { background: #0a96c8; }
+QSplitter::handle:horizontal { width: 8px; margin: 4px 0; }
+QSplitter::handle:vertical { height: 8px; margin: 0 4px; }
+QPushButton#panelFocus { min-width: 58px; padding: 3px 7px; font-size: 11px; }
+QPushButton#panelFocus:checked { background: rgba(84, 187, 222, 150); border-color: #087fab; }
+QPushButton:disabled { background: rgba(225, 235, 240, 180); border-color: rgba(37, 118, 156, 20); color: #8399a5; }
 """
 
 # Backward compatibility

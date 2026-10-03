@@ -368,6 +368,7 @@ class KiteReadOnlyAdapter:
         )
 
     def snapshot(self) -> GatewaySnapshotBundle:
+        capture_started_at = datetime.now(tz=UTC)
         profile = self.profile()
         account = self.account()
         positions = self.positions()
@@ -405,6 +406,8 @@ class KiteReadOnlyAdapter:
             ),
             payload_hash=digest,
             extras={"data_kind": "broker_observation", "read_only": True},
+            capture_started_at=capture_started_at,
+            capture_completed_at=datetime.now(tz=UTC),
         )
 
     def place_order(self, *_args: object, **_kwargs: object) -> None:

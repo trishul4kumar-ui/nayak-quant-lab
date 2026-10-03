@@ -56,6 +56,8 @@ class BrokerAccountSnapshot(BaseModel):
     source_sequence: int
     schema_version: str
     payload_hash: str
+    capture_started_at: datetime | None = None
+    capture_completed_at: datetime | None = None
     available_cash: float
     collateral: float
     utilized_margin: float
@@ -64,6 +66,12 @@ class BrokerAccountSnapshot(BaseModel):
     buying_power: float | None = None
     live_trading: bool = False
     write_enabled: bool = False
+
+    @property
+    def capture_window_seconds(self) -> float | None:
+        if self.capture_started_at is None or self.capture_completed_at is None:
+            return None
+        return (self.capture_completed_at - self.capture_started_at).total_seconds()
 
 
 class BrokerProfileSnapshot(BaseModel):
@@ -277,6 +285,14 @@ class GatewaySnapshotBundle(BaseModel):
     trades: tuple[BrokerFillSnapshot, ...]
     mappings: tuple[InstrumentMapping, ...]
     payload_hash: str
+    capture_started_at: datetime | None = None
+    capture_completed_at: datetime | None = None
     extras: dict[str, Any] = Field(default_factory=dict)
     live_trading: bool = False
     write_enabled: bool = False
+
+    @property
+    def capture_window_seconds(self) -> float | None:
+        if self.capture_started_at is None or self.capture_completed_at is None:
+            return None
+        return (self.capture_completed_at - self.capture_started_at).total_seconds()

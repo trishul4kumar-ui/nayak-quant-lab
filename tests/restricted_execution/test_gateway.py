@@ -7,8 +7,16 @@ import pytest
 from quantlab.execution_authorization.models import AuthorizationScope, HumanApprovalRecord
 from quantlab.realtime_data.hashing import sha256
 from quantlab.restricted_execution.adapter import MockRestrictedWriteAdapter
-from quantlab.restricted_execution.models import ExecutionState, GatewayOrderIntent
-from quantlab.restricted_execution.repository import reset_for_tests
+from quantlab.restricted_execution.models import (
+    ExecutionState,
+    ExecutionValidationContext,
+    GatewayOrderIntent,
+)
+from quantlab.restricted_execution.repository import (
+    configure_durable_store,
+    reset_for_tests,
+    submission,
+)
 from quantlab.restricted_execution.service import RestrictedExecutionGateway
 
 
@@ -64,6 +72,22 @@ def _intent(now: datetime) -> GatewayOrderIntent:
     )
 
 
+def _context() -> ExecutionValidationContext:
+    return ExecutionValidationContext(
+        market_price=100.0,
+        market_data_healthy=True,
+        broker_snapshot_fresh=True,
+        reconciliation_acceptable=True,
+        release_valid=True,
+        authorization_evidence_fresh=True,
+        account_equity=1_000.0,
+        available_cash=1_000.0,
+        available_margin=0.0,
+        current_gross_exposure=0.0,
+        projected_turnover=0.01,
+    )
+
+
 def test_timeout_is_unknown_and_never_retried() -> None:
     reset_for_tests()
     now = datetime(2026, 1, 2, tzinfo=UTC)
@@ -72,7 +96,8 @@ def test_timeout_is_unknown_and_never_retried() -> None:
     adapter = MockRestrictedWriteAdapter(outcome="timeout")
     gateway = RestrictedExecutionGateway(adapter)
     drafted = gateway.draft(_intent(now), approval)
-    valid = gateway.validate(drafted, approval, scope, now=now)
+    context = _context()
+    valid = gateway.validate(drafted, approval, scope, now=now, context=context)
     confirmed = gateway.confirm(
         valid,
         actor_id="vaibhav",
@@ -80,12 +105,26 @@ def test_timeout_is_unknown_and_never_retried() -> None:
         expires_at=now + timedelta(minutes=2),
         now=now,
     )
-    result = gateway.submit(confirmed, interactive=True, now=now)
+    result = gateway.submit(
+        confirmed,
+        approval=approval,
+        scope=scope,
+        context=context,
+        interactive=True,
+        now=now,
+    )
 
     assert result.state is ExecutionState.SUBMISSION_UNKNOWN
     assert len(adapter.calls) == 1
     with pytest.raises(ValueError, match="reconcile instead of retrying"):
-        gateway.submit(confirmed, interactive=True, now=now)
+        gateway.submit(
+            confirmed,
+            approval=approval,
+            scope=scope,
+            context=context,
+            interactive=True,
+            now=now,
+        )
 
 
 def test_noninteractive_submission_is_blocked() -> None:
@@ -94,7 +133,9 @@ def test_noninteractive_submission_is_blocked() -> None:
     scope = _scope(now)
     approval = _approval(scope, now)
     gateway = RestrictedExecutionGateway(MockRestrictedWriteAdapter())
-    valid = gateway.validate(gateway.draft(_intent(now), approval), approval, scope, now=now)
+    valid = gateway.validate(
+        gateway.draft(_intent(now), approval), approval, scope, now=now, context=_context()
+    )
     confirmed = gateway.confirm(
         valid,
         actor_id="vaibhav",
@@ -104,3 +145,47 @@ def test_noninteractive_submission_is_blocked() -> None:
     )
     with pytest.raises(PermissionError, match="non-interactive"):
         gateway.submit(confirmed, interactive=False, now=now)
+
+
+def test_ambiguous_submission_survives_restart_and_cannot_retry(tmp_path) -> None:
+    reset_for_tests()
+    configure_durable_store(tmp_path / "control-plane.sqlite")
+    now = datetime(2026, 1, 2, tzinfo=UTC)
+    scope = _scope(now)
+    approval = _approval(scope, now)
+    gateway = RestrictedExecutionGateway(MockRestrictedWriteAdapter(outcome="timeout"))
+    context = _context()
+    valid = gateway.validate(
+        gateway.draft(_intent(now), approval), approval, scope, now=now, context=context
+    )
+    confirmed = gateway.confirm(
+        valid,
+        actor_id="vaibhav",
+        confirmation_text=f"CONFIRM {valid.envelope_hash}",
+        expires_at=now + timedelta(minutes=2),
+        now=now,
+    )
+    result = gateway.submit(
+        confirmed,
+        approval=approval,
+        scope=scope,
+        context=context,
+        interactive=True,
+        now=now,
+    )
+    assert result.state is ExecutionState.SUBMISSION_UNKNOWN
+
+    configure_durable_store(tmp_path / "control-plane.sqlite")
+    restored = submission(confirmed.envelope_hash)
+    assert restored is not None
+    assert restored.state is ExecutionState.SUBMISSION_UNKNOWN
+    with pytest.raises(ValueError, match="reconcile instead of retrying"):
+        gateway.submit(
+            confirmed,
+            approval=approval,
+            scope=scope,
+            context=context,
+            interactive=True,
+            now=now,
+        )
+    reset_for_tests()

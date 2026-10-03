@@ -192,7 +192,7 @@ def run_ensemble(
     )
     last_preds = _last_predictions(state, dates[-1], predictions, panels, names, previous, regimes)
     status = CheckResult.NOT_TESTED if len(scored) < definition.min_obs else CheckResult.PASS
-    if flags.full_sample_replay or flags.stacking_leak:
+    if _leaky(flags):
         status = CheckResult.FAIL
     result = EnsembleResult(
         n_predictions=n_pred,

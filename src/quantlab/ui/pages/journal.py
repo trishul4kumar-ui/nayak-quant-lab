@@ -64,19 +64,22 @@ class JournalPage(LabPageShell):
         right_layout = QVBoxLayout(right)
         self._detail = QPlainTextEdit()
         self._detail.setPlaceholderText("What did this run teach you?")
-        save = QPushButton("Save note")
-        save.setObjectName("primary")
-        save.clicked.connect(self._save_note)
+        self._save = QPushButton("Save note")
+        self._save.setObjectName("primary")
+        self._save.setEnabled(False)
+        self._save.setToolTip("Select an experiment before saving a note")
+        self._save.clicked.connect(self._save_note)
         self._saved = QLabel()
         self._saved.setObjectName("nayakVoice")
         right_layout.addWidget(self._detail, 1)
         row = QHBoxLayout()
-        row.addWidget(save)
+        row.addWidget(self._save)
         row.addWidget(self._saved)
         row.addStretch()
         right_layout.addLayout(row)
         split.addWidget(left)
         split.addWidget(right)
+        self.register_splitter(split, "journal-detail")
         self.body().addWidget(split, 1)
         self.refresh()
 
@@ -110,11 +113,13 @@ class JournalPage(LabPageShell):
         if row < 0 or row >= len(self._entries):
             self._selected_id = None
             self._detail.clear()
+            self._save.setEnabled(False)
             return
         entry = self._entries[row]
         self._selected_id = entry.experiment_id
         self._detail.setPlainText(entry.note)
         self._saved.setText(entry.summary)
+        self._save.setEnabled(True)
 
     def _save_note(self) -> None:
         if not self._selected_id:

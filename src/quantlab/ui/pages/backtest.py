@@ -127,6 +127,8 @@ class BacktestPage(LabPageShell):
         self._quick_note.setMaximumHeight(64)
         note_row = QHBoxLayout()
         self._save_note = QPushButton("Save note")
+        self._save_note.setEnabled(False)
+        self._save_note.setToolTip("Run a backtest before saving a journal note")
         self._save_note.clicked.connect(self._save_quick_note)
         self._note_status = QLabel()
         self._note_status.setObjectName("nayakVoice")
@@ -203,6 +205,7 @@ class BacktestPage(LabPageShell):
         self._last_experiment_id = exp_id
         prefs = self._runtime.ui_settings.current
         self._quick_note.setPlainText(prefs.journal_notes.get(exp_id, ""))
+        self._save_note.setEnabled(bool(exp_id))
         self._note_status.setText(SYNTHETIC_SHARPE_DISCLAIMER)
         metric_rows = [
             [k, f"{v:.6f}" if isinstance(v, float) else str(v)] for k, v in metrics.items()

@@ -3,6 +3,7 @@ from __future__ import annotations
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QAction, QCloseEvent, QKeySequence, QShortcut, QShowEvent
 from PySide6.QtWidgets import (
+    QAbstractButton,
     QHBoxLayout,
     QLabel,
     QLineEdit,
@@ -129,6 +130,9 @@ class MainWindow(QMainWindow):
 
         brand = QLabel("NAYAK QUANT LAB")
         brand.setObjectName("brand")
+        brand.setToolTip("Local-first quantitative research workstation")
+        brand_meta = QLabel("RESEARCH · SHADOW OPERATIONS")
+        brand_meta.setObjectName("brandMeta")
         self._greeting_chip = QLabel()
         self._greeting_chip.setObjectName("nayakVoice")
 
@@ -150,15 +154,33 @@ class MainWindow(QMainWindow):
             "modeBadgeLive" if runtime.mode is AppMode.LIVE else "modeBadge"
         )
 
-        header = QHBoxLayout()
-        header.addWidget(brand)
-        header.addSpacing(16)
-        header.addWidget(self._greeting_chip)
-        header.addStretch()
+        self._header_host = QWidget()
+        self._header_host.setObjectName("topBar")
+        header = QHBoxLayout(self._header_host)
+        header.setContentsMargins(16, 10, 16, 10)
+        header.setSpacing(10)
+        brand_col = QVBoxLayout()
+        brand_col.setSpacing(0)
+        brand_col.addWidget(brand)
+        brand_col.addWidget(brand_meta)
+        header.addLayout(brand_col)
+        header.addSpacing(12)
+        self._command_search = QLineEdit()
+        self._command_search.setObjectName("commandSearch")
+        self._command_search.setPlaceholderText("Search the lab or run a command  ·  ⌘K")
+        self._command_search.setClearButtonEnabled(True)
+        self._command_search.returnPressed.connect(self._open_command_palette)
+        header.addWidget(self._command_search, 1)
         header.addWidget(self._guided_btn)
         header.addWidget(self._full_btn)
         header.addWidget(self._mode_badge)
-        header.addWidget(QLabel(f"v{runtime.version}"))
+        version = QLabel(f"v{runtime.version}")
+        version.setObjectName("versionTag")
+        header.addWidget(version)
+
+        self._safety_ribbon = QLabel()
+        self._safety_ribbon.setObjectName("safetyRibbon")
+        self._safety_ribbon.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
         self._context_host = QWidget()
         self._context_host.setObjectName("contextHost")
@@ -221,6 +243,7 @@ class MainWindow(QMainWindow):
         self._base_nav_items: list[NavItem] = []
 
         self.stack = QStackedWidget()
+        self.stack.setObjectName("pageDeck")
         self.home = HomePage(
             runtime,
             on_action=self._handle_focus_action,
@@ -352,6 +375,12 @@ class MainWindow(QMainWindow):
             "logs": self.logs,
         }
         self._wire_catalog_empty_actions()
+        for key, widget in self._pages.items():
+            if isinstance(widget, LabPageShell):
+                widget.enable_terminal_layout(
+                    layout_id=f"workspace:{key}",
+                    settings=self.runtime.ui_settings,
+                )
         self._page_shells: dict[str, QScrollArea] = {}
         for key, widget in self._pages.items():
             shell = wrap_page_scroll(widget)
@@ -368,11 +397,13 @@ class MainWindow(QMainWindow):
         body.addWidget(self.stack, 1)
 
         central = QWidget()
+        central.setObjectName("mainRoot")
         root = QVBoxLayout(central)
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
         root.addWidget(self._live_banner)
-        root.addLayout(header)
+        root.addWidget(self._header_host)
+        root.addWidget(self._safety_ribbon)
         root.addWidget(self._context_host)
         root.addWidget(self._breadcrumb)
         root.addWidget(self._notification_strip)
@@ -382,6 +413,7 @@ class MainWindow(QMainWindow):
         self.status_bar = FooterStatusBar()
         self.status_bar.chip_clicked.connect(self._select_nav)
         self.setStatusBar(self.status_bar)
+        self._install_action_feedback()
 
         self.nav.currentRowChanged.connect(self._nav_changed)
         self.nav.itemClicked.connect(self._nav_item_clicked)
@@ -435,6 +467,35 @@ class MainWindow(QMainWindow):
         for page in self._pages.values():
             if isinstance(page, CatalogLabPage) and page._on_empty_action is None:
                 page.set_empty_action(self._goto_backtest_and_run)
+
+    def _install_action_feedback(self) -> None:
+        """Make every enabled button acknowledge receipt in the terminal status rail."""
+        for button in self.findChildren(QAbstractButton):
+            if button.property("action_feedback_installed"):
+                continue
+            label = button.text().strip()
+            if label in {"«", "»"}:
+                continue
+            button.setProperty("action_feedback_installed", True)
+            button.clicked.connect(
+                lambda checked=False, control=button: self._announce_action(control, checked)
+            )
+
+    def _announce_action(self, button: QAbstractButton, checked: bool) -> None:
+        label = button.text().strip()
+        if not label:
+            return
+        if button.isCheckable():
+            state = "enabled" if checked else "disabled"
+            message = f"{label}: {state}"
+        else:
+            message = f"Action received: {label}"
+        self.statusBar().showMessage(message, 1800)
+        current_page = self.stack.currentWidget()
+        if isinstance(current_page, QScrollArea):
+            current_page = current_page.widget()
+        if isinstance(current_page, LabPageShell):
+            current_page.show_interaction_feedback(message)
 
     def _apply_density(self, _density: UiDensity | None = None) -> None:
         self._apply_density_to_pages()
@@ -544,6 +605,7 @@ class MainWindow(QMainWindow):
     def _open_command_palette(self) -> None:
         if self.runtime.ui_settings.current.experience_mode is ExperienceMode.GUIDED:
             self._set_experience_mode(ExperienceMode.FULL)
+        initial_query = self._command_search.text().strip()
         commands = build_palette_commands(self.runtime)
         prefs = self.runtime.ui_settings.current
         palette = CommandPalette(
@@ -553,9 +615,11 @@ class MainWindow(QMainWindow):
             on_action=self._run_palette_action,
             on_experiment=self._goto_journal_entry,
             on_command_run=self._record_palette_command,
+            initial_query=initial_query,
             parent=self,
         )
         palette.exec()
+        self._command_search.clear()
 
     def _record_palette_command(self, command_id: str) -> None:
         prefs = self.runtime.ui_settings.current
@@ -646,6 +710,16 @@ class MainWindow(QMainWindow):
         live = self.runtime.mode is AppMode.LIVE
         self._live_banner.setVisible(live)
         self._mode_badge.setText(f"Mode: {self.runtime.mode.value.upper()}")
+        if live:
+            self._safety_ribbon.setText(
+                "LIVE MODE · NEW LIVE ORDERS REMAIN GATED · "
+                "REVIEW SAFETY CONTROLS BEFORE ANY ACTION"
+            )
+        else:
+            self._safety_ribbon.setText(
+                "RESEARCH / SHADOW MODE · SIMULATED WORKFLOWS · "
+                "LIVE TRADING DISABLED · BROKER WRITE DISABLED"
+            )
         self._mode_badge.setObjectName("modeBadgeLive" if live else "modeBadge")
         self._mode_badge.setStyleSheet("")
         self._mode_badge.style().unpolish(self._mode_badge)

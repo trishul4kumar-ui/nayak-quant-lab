@@ -64,6 +64,8 @@ class ComparePage(LabPageShell):
         actions = QVBoxLayout()
         self._compare_btn = QPushButton("Compare selected")
         self._compare_btn.setObjectName("primary")
+        self._compare_btn.setEnabled(False)
+        self._compare_btn.setToolTip("Select at least one experiment to compare")
         self._compare_btn.clicked.connect(self._render_selected)
         self._select_latest = QPushButton("Latest 3")
         self._select_latest.clicked.connect(self._select_latest_three)
@@ -126,6 +128,7 @@ class ComparePage(LabPageShell):
             self._updating_selection = False
             selected = self._picker.selectedItems()
         count = len(selected)
+        self._compare_btn.setEnabled(count >= 1)
         self._hint.setText(
             f"{count} selected (max {self.MAX_SELECTED}). "
             + ("Choose at least one run to compare." if count == 0 else "")
@@ -140,6 +143,7 @@ class ComparePage(LabPageShell):
 
     def _render_selected(self) -> None:
         rows = self._selected_rows()
+        self._compare_btn.setEnabled(bool(rows))
         if not rows:
             fill_table(self._table, ["Metric"], [["Select runs from the list above"]])
             self._curve_chart.set_series([])

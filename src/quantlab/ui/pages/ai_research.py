@@ -47,11 +47,14 @@ class AiResearchPage(LabPageShell):
         self._input = QLineEdit()
         self._input.setPlaceholderText("Ask about Sharpe, momentum, validation…")
         self._input.returnPressed.connect(self._send)
-        send = QPushButton("Send")
-        send.setObjectName("primary")
-        send.clicked.connect(self._send)
+        self._send_button = QPushButton("Send")
+        self._send_button.setObjectName("primary")
+        self._send_button.setEnabled(False)
+        self._send_button.setToolTip("Type a question first")
+        self._send_button.clicked.connect(self._send)
+        self._input.textChanged.connect(self._sync_send_enabled)
         input_row.addWidget(self._input, 1)
-        input_row.addWidget(send)
+        input_row.addWidget(self._send_button)
         self.body().addLayout(input_row)
         self.refresh()
 
@@ -68,6 +71,9 @@ class AiResearchPage(LabPageShell):
         self._append_message("TK", text, user=True)
         reply = chat(self._runtime, text)
         self._append_message("NAYAK", reply, user=False)
+
+    def _sync_send_enabled(self, text: str) -> None:
+        self._send_button.setEnabled(bool(text.strip()))
 
     def _append_message(self, speaker: str, body: str, *, user: bool) -> None:
         frame = QFrame()

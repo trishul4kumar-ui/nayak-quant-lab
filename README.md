@@ -1,6 +1,7 @@
 # NAYAK QUANT LAB
 
-Private local-first quantitative research and trading laboratory for the Indian equity and derivatives market.
+Private local-first quantitative research and pre-live controlled-execution laboratory for
+the Indian equity and derivatives market.
 
 QUANT LAB is a **scientific computing laboratory connected to a trading execution system**. It is not a chatbot connected to a broker.
 
@@ -11,7 +12,7 @@ DATA → INTEGRITY → RESEARCH → ALPHA → MODEL → VALIDATION
 
 AI is an assisting intelligence layer. It cannot bypass the risk firewall, execution rules, or human authorization.
 
-## Current status (Prompt 01–31 — 2026-08-31)
+## Current status (Prompts 01–38; hardening in progress — 2026-10-03)
 
 Implemented:
 
@@ -42,12 +43,32 @@ Implemented:
 - **Real-time data gateway**: observe-only mock/replay adapters; frozen MarketState(T); not a second fabric (Prompt 29 / ADR-043)
 - **Real-time decision engine**: snapshot → target portfolio; uncertified releases abstain; not an OMS (Prompt 30 / ADR-044)
 - **Digital twin**: deterministic shadow/replay with simulated fills; zero broker write (Prompt 31 / ADR-045)
+- **Read-only broker and account reconciliation**: mock, replay, and explicitly configured
+  Kite read-only boundaries; no order-routing implementation (Prompts 32–33)
+- **Production market-data boundary**: provider contract and `NOT_CONFIGURED` production
+  adapter; no bundled live feed (Prompt 34)
+- **Production-shadow and authorization control plane**: hash-verified replay evidence,
+  read-only reconciliation, human approvals, and a test-only restricted submission adapter
+  (Prompts 35–37)
+- **Live operations**: observed health signals, incident evidence, optional one-way
+  containment, and no automatic resume (Prompt 38)
 - Jobs run off the UI thread; live trading remains **disabled**
 - Reproducible synthetic momentum slice from CLI or the Backtest Lab (via the fabric)
 
 Not implemented (intentionally):
 
-- Live trading, OpenAlgo/Zerodha, official NSE holiday file, licensed real market dump, cloud hosting, full CSCV PBO, calibrated market impact, NIFTY/index beta, PIT sector/cap/fundamentals, commercial QP solver, ADF unit-root library, RL/LLM traders
+- Live trading, production broker order placement, OpenAlgo routing, official NSE holiday
+  file, licensed real market dump, cloud hosting, full CSCV PBO, calibrated market impact,
+  NIFTY/index beta, PIT sector/cap/fundamentals, commercial QP solver, ADF unit-root
+  library, and RL/LLM traders
+
+## Safety and evidence boundary
+
+The codebase is not production-ready and does not demonstrate profitability. Synthetic and
+mock outputs prove software paths only; they are not NSE market evidence. Production market
+data is `NOT_CONFIGURED` unless a user supplies a compliant provider. Kite is read-only when
+configured. The production default is `DisabledWriteAdapter`; no production broker-write
+adapter is present. `LIVE_TRADING=false` and `BROKER_WRITE_ENABLED=false` remain defaults.
 
 ## Launch the desktop app
 

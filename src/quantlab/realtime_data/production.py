@@ -134,7 +134,13 @@ class ProductionMarketDataAdapter:
 
     def _quality_checked(self, row: MarketObservation) -> MarketObservation:
         degraded = row.quality is QualityStatus.DEGRADED
-        if row.bid is not None and row.ask is not None and row.bid >= row.ask:
+        if (
+            row.bid is not None
+            and row.ask is not None
+            and row.bid > 0
+            and row.ask > 0
+            and row.bid >= row.ask
+        ):
             self._faults.append("crossed_or_locked_quote")
             degraded = True
         if row.price is not None:

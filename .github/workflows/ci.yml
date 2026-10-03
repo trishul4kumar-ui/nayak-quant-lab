@@ -1,0 +1,39 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  quality-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install
+        run: python -m pip install --upgrade pip && python -m pip install -e ".[dev]" build
+      - name: Ruff
+        run: ruff check src tests
+      - name: Mypy
+        run: mypy src/quantlab
+      - name: Full test suite with coverage report
+        run: pytest -q --cov=quantlab --cov-report=term-missing
+      - name: Optimized-mode safety suite
+        run: >-
+          python -O -m pytest -q
+          tests/safety tests/broker_gateway tests/realtime_data tests/realtime_decision
+          tests/digital_twin tests/production_shadow tests/execution_authorization
+          tests/restricted_execution tests/live_ops
+      - name: Build distribution
+        run: python -m build
+      - name: Basic secret-pattern check
+        run: >-
+          ! git grep -n -I -E
+          '(api[_-]?key|access[_-]?token|secret)[[:space:]]*=[[:space:]]*["'"'][^"'"']{8,}'
+          -- ':!*.example' ':!.github/workflows/*'

@@ -89,6 +89,8 @@ class SettingsPage(LabPageShell):
         name_row = QHBoxLayout()
         self._name_input = QLineEdit()
         self._name_save = QPushButton("Save")
+        self._name_save.setEnabled(False)
+        self._name_input.textChanged.connect(self._sync_name_save)
         self._name_save.clicked.connect(self._save_name)
         name_row.addWidget(QLabel("Display name"))
         name_row.addWidget(self._name_input, 1)
@@ -172,6 +174,10 @@ class SettingsPage(LabPageShell):
             self._on_name_change()
         self.refresh()
 
+    def _sync_name_save(self, name: str) -> None:
+        current = self._runtime.ui_settings.current.tk_display_name
+        self._name_save.setEnabled(name.strip() != current)
+
     def _set_theme(self, theme: UiTheme) -> None:
         prefs = self._runtime.ui_settings.current
         if prefs.theme is theme:
@@ -222,6 +228,7 @@ class SettingsPage(LabPageShell):
     def refresh(self) -> None:
         prefs = self._runtime.ui_settings.current
         self._name_input.setText(prefs.tk_display_name)
+        self._sync_name_save(self._name_input.text())
         self._dark_btn.setChecked(prefs.theme is UiTheme.DARK)
         self._light_btn.setChecked(prefs.theme is UiTheme.LIGHT)
         self._launch_guided.setChecked(prefs.experience_mode is ExperienceMode.GUIDED)

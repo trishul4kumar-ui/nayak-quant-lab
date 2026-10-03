@@ -11,6 +11,41 @@ make install
 
 Copy `.env.example` to `.env`. Keep `LIVE_TRADING=false` and `QUANT_LAB_MODE=research`.
 
+## Optional: read-only Kite quote snapshot
+
+The desktop **Real-Time Data Lab** can connect to Kite only after the following
+environment values are configured locally. Do not paste credentials into source
+code, logs, or chat. Symbols must use exact `EXCHANGE:SYMBOL` identities.
+
+```bash
+KITE_API_KEY=your_api_key
+KITE_API_SECRET=your_api_secret
+KITE_MARKET_DATA_SYMBOLS=NSE:INFY,NSE:TCS
+LIVE_TRADING=false
+BROKER_WRITE_ENABLED=false
+```
+
+Then run the explicit local login helper. It opens Kite's official login page,
+uses the registered loopback callback, exchanges the one-time request token,
+and writes KITE_ACCESS_TOKEN to the local .env with owner-only file
+permissions. Neither secret is printed.
+
+```bash
+quantlab market-data kite-login
+```
+
+After the browser says authentication completed, capture a single read-only
+quote snapshot:
+
+```bash
+quantlab market-data snapshot --adapter kite
+```
+
+This path only makes an HTTPS `GET /quote` request and freezes the observed
+snapshot. It has no order, cancel, modify, or broker-write capability. Missing
+credentials, unknown symbols, malformed responses, and provider errors fail
+closed; they never fall back to synthetic data.
+
 ## Desktop application
 
 ```bash

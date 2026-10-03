@@ -54,9 +54,10 @@ def reset_for_tests() -> None:
 
 def _assert_safety() -> LiveSafetyGates:
     gates = LiveSafetyGates()
-    assert gates.live_trading is False
-    assert gates.broker_write_enabled is False
-    assert live_release_blocked() is True
+    if gates.live_trading or gates.broker_write_enabled or not live_release_blocked():
+        raise DecisionBlocked(
+            "real-time decision path refuses a live or write-enabled safety state"
+        )
     return gates
 
 
@@ -226,5 +227,6 @@ def _store(item: RealTimeDecision) -> RealTimeDecision:
         state=item.state,
         hash=item.decision_hash,
     )
-    assert LiveSafetyGates().live_trading is False
+    if LiveSafetyGates().live_trading:
+        raise DecisionBlocked("stored decision cannot coexist with LIVE_TRADING=true")
     return item

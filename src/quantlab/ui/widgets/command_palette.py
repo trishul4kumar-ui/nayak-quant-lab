@@ -29,6 +29,7 @@ class CommandPalette(QDialog):
         on_action: Callable[[str], None],
         on_experiment: Callable[[str], None],
         on_command_run: Callable[[str], None] | None = None,
+        initial_query: str = "",
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
@@ -55,7 +56,9 @@ class CommandPalette(QDialog):
         self._search.textChanged.connect(self._repopulate)
         self._list.itemActivated.connect(self._activate)
         self._search.returnPressed.connect(self._activate_current)
-        self._repopulate("")
+        self._search.setText(initial_query)
+        if not initial_query:
+            self._repopulate("")
 
     def showEvent(self, event: QShowEvent) -> None:
         super().showEvent(event)

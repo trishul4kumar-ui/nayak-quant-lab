@@ -5,18 +5,19 @@ from __future__ import annotations
 from collections.abc import Callable
 from contextlib import suppress
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QTimer
 from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
     QLabel,
     QPushButton,
+    QSplitter,
     QToolButton,
     QVBoxLayout,
     QWidget,
 )
 
-from quantlab.app.settings_store import UiDensity
+from quantlab.app.settings_store import UiDensity, UiSettingsStore
 
 
 class StatusBadge(QLabel):
@@ -177,6 +178,7 @@ class LabPageShell(QWidget):
         technical: str = "",
     ) -> None:
         super().__init__()
+        self.setObjectName("labShell")
         outer = QVBoxLayout(self)
         self._outer = outer
 
@@ -193,6 +195,19 @@ class LabPageShell(QWidget):
             sub.setStyleSheet("color: #9aa1ad; font-size: 13px;")
             title_col.addWidget(sub)
         header.addLayout(title_col, 1)
+        self._interaction_status = QLabel("READY")
+        self._interaction_status.setObjectName("pageActionStatus")
+        self._interaction_status.setToolTip("The most recent action received by this workspace")
+        self._interaction_status.setFixedHeight(28)
+        self._interaction_status.setMaximumWidth(220)
+        self._interaction_status.setStyleSheet(
+            "background: #173327; color: #4bd0a7; border: 1px solid #275343; "
+            "border-radius: 4px; padding: 4px 8px; font-size: 10px; font-weight: 700;"
+        )
+        header.addWidget(
+            self._interaction_status,
+            alignment=Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignRight,
+        )
         self._toolbar = QHBoxLayout()
         header.addLayout(self._toolbar)
         outer.addLayout(header)
@@ -206,6 +221,13 @@ class LabPageShell(QWidget):
 
         self._running = RunningBanner()
         self._body.addWidget(self._running)
+        self._workspace_splitter: QSplitter | None = None
+        self._workspace_layout_id: str | None = None
+        self._workspace_settings: UiSettingsStore | None = None
+        self._layout_reset: QPushButton | None = None
+        self._interaction_timer = QTimer(self)
+        self._interaction_timer.setSingleShot(True)
+        self._interaction_timer.timeout.connect(self._restore_ready_status)
         self._apply_density(UiDensity.COMFORTABLE)
 
     def apply_density(self, density: UiDensity) -> None:
@@ -226,3 +248,132 @@ class LabPageShell(QWidget):
 
     def add_toolbar_widget(self, widget: QWidget) -> None:
         self._toolbar.addWidget(widget)
+
+    def show_interaction_feedback(self, message: str) -> None:
+        """Expose input acknowledgement inside the active workspace, not only the footer."""
+        self._interaction_timer.stop()
+        action = message.removeprefix("Action received:").strip()
+        self._interaction_status.setText(f"ACK · {action.upper()}")
+        self._interaction_status.setToolTip(message)
+        self._interaction_status.setStyleSheet(
+            "background: #12344a; color: #66c8f2; border: 1px solid #286581; "
+            "border-radius: 4px; padding: 4px 8px; font-size: 10px; font-weight: 700;"
+        )
+        self._interaction_timer.start(2600)
+
+    def _restore_ready_status(self) -> None:
+        self._interaction_status.setText("READY")
+        self._interaction_status.setToolTip("The workspace is ready for the next action")
+        self._interaction_status.setStyleSheet(
+            "background: #173327; color: #4bd0a7; border: 1px solid #275343; "
+            "border-radius: 4px; padding: 4px 8px; font-size: 10px; font-weight: 700;"
+        )
+
+    def enable_terminal_layout(self, *, layout_id: str, settings: UiSettingsStore) -> None:
+        """Turn the completed page body into a persisted, vertically resizable workspace.
+
+        Pages continue to build with the familiar ``body()`` layout during construction.
+        The main window calls this after every page is complete, so the behaviour is
+        consistent without forcing each lab to hand-code splitter plumbing.
+        """
+        if self._workspace_splitter is not None:
+            return
+        self._workspace_layout_id = layout_id
+        self._workspace_settings = settings
+        sections: list[tuple[QWidget, int]] = []
+        while self._body.count() > 1:
+            item = self._body.takeAt(1)
+            if item is None:
+                break
+            widget = item.widget()
+            item_layout = item.layout()
+            if widget is None and item_layout is not None:
+                widget = QWidget()
+                widget.setLayout(item_layout)
+            if widget is not None:
+                sections.append((widget, max(item.maximumSize().height(), 1)))
+        if len(sections) < 2:
+            self._restore_workspace_layout()
+            return
+
+        splitter = QSplitter(Qt.Orientation.Vertical)
+        splitter.setObjectName("workspaceSplitter")
+        splitter.setChildrenCollapsible(False)
+        splitter.setHandleWidth(8)
+        splitter.setOpaqueResize(True)
+        for widget, _stretch in sections:
+            splitter.addWidget(widget)
+            widget.setMinimumHeight(max(widget.minimumSizeHint().height(), 44))
+        for index in range(1, splitter.count()):
+            splitter.handle(index).setToolTip("Drag to resize workspace panels")
+        splitter.splitterMoved.connect(self._persist_workspace_layout)
+        self._body.addWidget(splitter, 1)
+
+        self._workspace_splitter = splitter
+        self._restore_workspace_layout()
+        self._add_layout_reset()
+
+    def register_splitter(self, splitter: QSplitter, name: str) -> None:
+        """Persist an additional page-local splitter, such as the journal detail pane."""
+        splitter.setChildrenCollapsible(False)
+        splitter.setHandleWidth(8)
+        splitter.setOpaqueResize(True)
+        for index in range(1, splitter.count()):
+            splitter.handle(index).setToolTip("Drag to resize panels")
+        splitter.setProperty("terminal_layout_name", name)
+        splitter.splitterMoved.connect(self._persist_workspace_layout)
+        self._add_layout_reset()
+
+    def _add_layout_reset(self) -> None:
+        if self._layout_reset is not None:
+            return
+        self._layout_reset = QPushButton("Reset panels")
+        self._layout_reset.setToolTip("Restore the default panel heights for this page")
+        self._layout_reset.clicked.connect(self.reset_terminal_layout)
+        self.add_toolbar_widget(self._layout_reset)
+
+    def reset_terminal_layout(self) -> None:
+        if self._workspace_splitter is not None:
+            self._workspace_splitter.setSizes([100] * self._workspace_splitter.count())
+        for splitter in self.findChildren(QSplitter):
+            if splitter is self._workspace_splitter:
+                continue
+            splitter.setSizes([100] * splitter.count())
+        for widget in self.findChildren(QWidget):
+            reset = getattr(widget, "reset_layout", None)
+            if callable(reset):
+                reset()
+        self._persist_workspace_layout()
+
+    def has_terminal_layout(self) -> bool:
+        return self._workspace_splitter is not None or bool(self.findChildren(QSplitter))
+
+    def _persist_workspace_layout(self, *_args: object) -> None:
+        if self._workspace_settings is None or self._workspace_layout_id is None:
+            return
+        payload: dict[str, list[int]] = {}
+        if self._workspace_splitter is not None:
+            payload["main"] = self._workspace_splitter.sizes()
+        for splitter in self.findChildren(QSplitter):
+            name = splitter.property("terminal_layout_name")
+            if isinstance(name, str) and name:
+                payload[name] = splitter.sizes()
+        self._workspace_settings.current.terminal_layouts[self._workspace_layout_id] = payload
+        self._workspace_settings.save()
+
+    def _restore_workspace_layout(self) -> None:
+        if self._workspace_settings is None or self._workspace_layout_id is None:
+            return
+        layouts = self._workspace_settings.current.terminal_layouts
+        payload = layouts.get(self._workspace_layout_id, {})
+        if self._workspace_splitter is not None:
+            sizes = payload.get("main")
+            if sizes and len(sizes) == self._workspace_splitter.count():
+                self._workspace_splitter.setSizes(sizes)
+        for splitter in self.findChildren(QSplitter):
+            name = splitter.property("terminal_layout_name")
+            if not isinstance(name, str) or not name:
+                continue
+            sizes = payload.get(name)
+            if sizes and len(sizes) == splitter.count():
+                splitter.setSizes(sizes)

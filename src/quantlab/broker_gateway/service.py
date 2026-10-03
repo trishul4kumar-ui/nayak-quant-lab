@@ -78,9 +78,8 @@ def select_adapter(name: str) -> None:
 
 def _assert_safety() -> LiveSafetyGates:
     gates = LiveSafetyGates()
-    assert gates.live_trading is False
-    assert gates.broker_write_enabled is False
-    assert live_release_blocked() is True
+    if gates.live_trading or gates.broker_write_enabled or not live_release_blocked():
+        raise BrokerGatewayError("read-only broker gateway refuses a live or write-enabled state")
     return gates
 
 
@@ -126,8 +125,10 @@ def connect(
             "live_trading": False,
         }
     )
-    assert cert_state() == before_cert
-    assert LiveSafetyGates().live_trading is False
+    if cert_state() != before_cert or LiveSafetyGates().live_trading:
+        raise BrokerGatewayError(
+            "read-only connect attempted to alter release or live-trading state"
+        )
     return health.model_copy(
         update={
             "state": current().value,

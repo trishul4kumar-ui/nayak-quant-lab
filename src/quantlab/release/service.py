@@ -164,15 +164,22 @@ def approve(request: CertificationRequest | None = None) -> CertificationResult:
         raise InvalidReleaseTransition(f"{current().value} cannot become release eligible")
     manifest = mint_manifest(request, release_id=f"relman-{request.package_id}")
     updated = evaluate(request)
-    return updated.model_copy(
+    eligible = updated.model_copy(
         update={
             "state": CertState.RELEASE_ELIGIBLE,
             "manifest": manifest,
             "live_enabled": False,
-            "blocked": True,
-            "note": "RELEASE_ELIGIBLE is not LIVE_ENABLED.",
+            "blocked": False,
+            "note": (
+                "RELEASE_ELIGIBLE permits restricted human-review eligibility only. "
+                "LIVE_TRADING and broker writes remain disabled."
+            ),
         }
     )
+    # Persist the reviewed release state.  ``blocked=False`` is deliberately
+    # not a live-trading flag: ``live_enabled`` and ``live_trading`` remain
+    # false, while the authorization service can evaluate the release evidence.
+    return put(eligible)
 
 
 def reject(request: CertificationRequest | None = None) -> CertificationResult:

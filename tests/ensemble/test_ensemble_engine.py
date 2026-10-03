@@ -91,3 +91,13 @@ def test_stacking_uses_history() -> None:
     )
     assert leaked.note.startswith("leaky")
     assert leaked.n_scored >= 0
+
+
+@pytest.mark.ensemble
+@pytest.mark.parametrize("flag", list(EnsembleLeakFlags.model_fields))
+def test_every_declared_leakage_flag_forces_failure(flag: str) -> None:
+    bars = MemoryBarProvider(n_days=40).all_bars()
+    _panels, _labels, result = run_ensemble(
+        get_ensemble("ew_mom_5_20"), bars, leaks=EnsembleLeakFlags(**{flag: True})
+    )
+    assert result.status.value == "fail"

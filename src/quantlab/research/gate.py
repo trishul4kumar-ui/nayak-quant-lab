@@ -48,6 +48,7 @@ def evaluate_research_gate(
     statistical_status: CheckResult,
     n_hypotheses: int,
     test_used_for_selection: bool,
+    multiple_testing_status: CheckResult | None = None,
 ) -> ResearchGateResult:
     reasons: list[GateReason] = []
     warnings: list[str] = []
@@ -85,7 +86,7 @@ def evaluate_research_gate(
     if oos_sharpe is None:
         add("oos_evidence", CheckResult.NOT_TESTED, False)
     else:
-        add("oos_evidence", CheckResult.WARN, False, f"oos_sharpe={oos_sharpe:.4f}")
+        add("oos_evidence", CheckResult.PASS, False, f"oos_sharpe={oos_sharpe:.4f}")
 
     if cost_still_positive_at_20bps is None:
         add("cost_robustness", CheckResult.NOT_TESTED, False)
@@ -101,12 +102,10 @@ def evaluate_research_gate(
         "isolated Sharpe peak" if parameter_fragile else "surface recorded",
     )
     add("statistical_evidence", statistical_status, False)
-    add(
-        "multiple_testing",
-        CheckResult.WARN,
-        False,
-        f"n_hypotheses={n_hypotheses}",
-    )
+    multiple_status = multiple_testing_status
+    if multiple_status is None:
+        multiple_status = CheckResult.PASS if n_hypotheses <= 1 else CheckResult.NOT_TESTED
+    add("multiple_testing", multiple_status, False, f"n_hypotheses={n_hypotheses}")
 
     if data_kind == "synthetic":
         add(

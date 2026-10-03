@@ -166,7 +166,11 @@ def _predict_at(
         return {}, prev, 0
     try:
         xs, ys = labeled_rows(
-            dataset, train_dates, model.features, label_as_feature=flags.label_as_feature
+            dataset,
+            train_dates,
+            model.features,
+            label_as_feature=flags.label_as_feature,
+            training_cutoff=as_of,
         )
     except ModelError:
         return {}, prev, 0

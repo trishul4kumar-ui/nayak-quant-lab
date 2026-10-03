@@ -6,6 +6,7 @@ from quantlab.labels.definition import (
     forward_excess_return,
     forward_return,
     forward_volatility,
+    resolve_label,
 )
 from quantlab.labels.engine import LabelObservation, compute_label, compute_label_panel
 
@@ -19,5 +20,6 @@ __all__ = [
     "forward_drawdown",
     "forward_excess_return",
     "forward_return",
+    "resolve_label",
     "forward_volatility",
 ]

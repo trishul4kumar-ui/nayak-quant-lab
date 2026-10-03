@@ -146,12 +146,18 @@ def size_fractional_kelly(
 
 
 def size_confidence_scaled(scores: dict[str, float], confidence: float) -> SizingResult:
-    scaled = {name: max(score, 0.0) * confidence for name, score in scores.items()}
+    if not 0.0 <= confidence <= 1.0:
+        raise CapitalError("confidence must be in [0, 1]")
+    composition = _normalize(_positive_scores(scores))
+    scaled = {name: weight * confidence for name, weight in composition.items()}
     return SizingResult(
         method_id=SizingMethod.CONFIDENCE_SCALED.value,
         parameters={"confidence": confidence},
-        output_weights=_normalize(scaled),
-        diagnostics={"rule": "w ∝ score × allocation_confidence"},
+        output_weights=scaled,
+        diagnostics={
+            "rule": "normalized score composition × allocation_confidence",
+            "deployment": "confidence scales gross exposure; residual remains cash",
+        },
     )
 
 
@@ -162,12 +168,19 @@ def size_hybrid(names: list[str], request: AllocationRequest, confidence: float)
         mixed = {name: 0.5 * score[name] + 0.5 * inv[name] for name in names}
     else:
         mixed = score
-    mixed = {name: mixed[name] * max(confidence, 1e-12) for name in names}
+    if not 0.0 <= confidence <= 1.0:
+        raise CapitalError("confidence must be in [0, 1]")
+    mixed = _normalize(mixed)
+    mixed = {name: mixed[name] * confidence for name in names}
     return SizingResult(
         method_id=SizingMethod.HYBRID.value,
         parameters={"score": 0.5, "inv_vol": 0.5, "confidence": confidence},
-        output_weights=_normalize(mixed),
-        diagnostics={"rule": "0.5 score + 0.5 inv-vol, then confidence scale"},
+        output_weights=mixed,
+        diagnostics={
+            "rule": (
+                "normalized 0.5 score + 0.5 inv-vol composition, then confidence deployment scale"
+            )
+        },
     )
 
 

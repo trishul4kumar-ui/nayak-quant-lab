@@ -189,6 +189,8 @@ class BacktestWizardPage(LabPageShell):
         self._quick_note.setMaximumHeight(80)
         save_row = QHBoxLayout()
         self._save_note_btn = QPushButton("Save note")
+        self._save_note_btn.setEnabled(False)
+        self._save_note_btn.setToolTip("Complete a backtest before saving a journal note")
         self._save_note_btn.clicked.connect(self._save_quick_note)
         self._note_saved = QLabel()
         self._note_saved.setObjectName("nayakVoice")
@@ -253,6 +255,7 @@ class BacktestWizardPage(LabPageShell):
         self._progress.setValue(0)
         self._quick_note.clear()
         self._note_saved.clear()
+        self._save_note_btn.setEnabled(False)
         self._update_nav()
 
     def _start_job(self) -> None:
@@ -312,6 +315,7 @@ class BacktestWizardPage(LabPageShell):
         existing = prefs.journal_notes.get(exp_id, "")
         self._quick_note.setPlainText(existing)
         self._note_saved.clear()
+        self._save_note_btn.setEnabled(bool(exp_id))
         self._set_result_badge(data_kind)
         self._dash.card(0).set_value(
             sharpe_txt,

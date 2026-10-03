@@ -16,6 +16,7 @@ from quantlab.restricted_execution.adapter import (
 from quantlab.restricted_execution.models import (
     ExecutionEnvelope,
     ExecutionState,
+    ExecutionValidationContext,
     GatewayOrderIntent,
     GatewaySubmission,
     HumanConfirmation,
@@ -65,6 +66,7 @@ class RestrictedExecutionGateway:
         scope: AuthorizationScope,
         *,
         now: datetime | None = None,
+        context: ExecutionValidationContext | None = None,
     ) -> ExecutionEnvelope:
         at = now or _now()
         errors: list[str] = []
@@ -99,6 +101,7 @@ class RestrictedExecutionGateway:
         )
         if is_active(KillScope.GLOBAL) or is_active(action_scope):
             errors.append("kill switch is active")
+        _validate_current_context(intent, scope, context, errors)
         state = ExecutionState.VALIDATED if not errors else ExecutionState.DRAFT
         return put_envelope(
             envelope.model_copy(update={"state": state, "validation_errors": tuple(errors)})
@@ -135,7 +138,14 @@ class RestrictedExecutionGateway:
         return put_envelope(envelope.model_copy(update={"state": ExecutionState.CONFIRMED}))
 
     def submit(
-        self, envelope: ExecutionEnvelope, *, interactive: bool = False, now: datetime | None = None
+        self,
+        envelope: ExecutionEnvelope,
+        *,
+        approval: HumanApprovalRecord | None = None,
+        scope: AuthorizationScope | None = None,
+        context: ExecutionValidationContext | None = None,
+        interactive: bool = False,
+        now: datetime | None = None,
     ) -> GatewaySubmission:
         """Submit one time only. Timeout becomes SUBMISSION_UNKNOWN and is never retried."""
         at = now or _now()
@@ -149,6 +159,13 @@ class RestrictedExecutionGateway:
         existing = submission(envelope.envelope_hash)
         if existing is not None:
             raise ValueError("submission already attempted; reconcile instead of retrying")
+        if approval is None or scope is None:
+            raise ValueError("current approval and scope are required at the submission boundary")
+        revalidated = self.validate(envelope, approval, scope, now=at, context=context)
+        if revalidated.state is not ExecutionState.VALIDATED:
+            raise ValueError(
+                "submission revalidation failed: " + "; ".join(revalidated.validation_errors)
+            )
         if not self._adapter.is_test_adapter:
             raise PermissionError("no production broker write adapter is enabled")
         put_envelope(envelope.model_copy(update={"state": ExecutionState.SUBMITTING}))
@@ -211,3 +228,51 @@ class RestrictedExecutionGateway:
         if item is not None:
             put_envelope(item.model_copy(update={"state": result.state}))
         return result
+
+
+def _validate_current_context(
+    intent: GatewayOrderIntent,
+    scope: AuthorizationScope,
+    context: ExecutionValidationContext | None,
+    errors: list[str],
+) -> None:
+    if context is None:
+        errors.append(
+            "fresh market, broker, reconciliation, release, and account evidence is required"
+        )
+        return
+    boolean_checks = {
+        "market data is unhealthy or unknown": context.market_data_healthy,
+        "broker snapshot is stale or unknown": context.broker_snapshot_fresh,
+        "reconciliation is unacceptable or unknown": context.reconciliation_acceptable,
+        "release is invalid or unknown": context.release_valid,
+        "authorization evidence is stale or unknown": context.authorization_evidence_fresh,
+    }
+    errors.extend(name for name, valid in boolean_checks.items() if not valid)
+    price = intent.limit_price if intent.order_type.lower() == "limit" else context.market_price
+    if price is None or price <= 0:
+        errors.append("current price is required for market-order notional validation")
+        return
+    notional = intent.quantity * price
+    if scope.max_notional is None or notional > scope.max_notional:
+        errors.append("order notional exceeds authorized scope")
+    if context.account_equity is None or context.account_equity <= 0:
+        errors.append("account equity is unknown")
+    elif context.current_gross_exposure is None:
+        errors.append("current gross exposure is unknown")
+    elif scope.max_gross_exposure is None or (
+        context.current_gross_exposure + notional / context.account_equity
+        > scope.max_gross_exposure
+    ):
+        errors.append("resulting gross exposure exceeds authorized scope")
+    if context.projected_turnover is None:
+        errors.append("projected turnover is unknown")
+    elif scope.max_turnover is None or context.projected_turnover > scope.max_turnover:
+        errors.append("projected turnover exceeds authorized scope")
+    if context.available_cash is None or context.available_margin is None:
+        errors.append("cash or margin state is unknown")
+    elif (
+        intent.action.value == "SUBMIT"
+        and notional > context.available_cash + context.available_margin
+    ):
+        errors.append("cash and margin are insufficient")

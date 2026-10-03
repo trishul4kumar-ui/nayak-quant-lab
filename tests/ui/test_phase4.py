@@ -33,25 +33,25 @@ def qapp() -> QApplication:
 
 @pytest.mark.desktop
 def test_stylesheet_for_light_and_dark() -> None:
-    assert "#f7f5f2" in stylesheet_for(UiTheme.LIGHT)
-    assert "#1c1f26" in stylesheet_for(UiTheme.DARK)
+    assert "#edf5f9" in stylesheet_for(UiTheme.LIGHT)
+    assert "#06111d" in stylesheet_for(UiTheme.DARK)
     assert LIGHT_STYLESHEET.startswith("\nQWidget")
 
 
 @pytest.mark.desktop
 def test_apply_theme_updates_app(qapp: QApplication) -> None:
     apply_theme(qapp, UiTheme.LIGHT)
-    assert "#f7f5f2" in qapp.styleSheet()
+    assert "#edf5f9" in qapp.styleSheet()
     apply_theme(qapp, UiTheme.DARK)
-    assert "#1c1f26" in qapp.styleSheet()
+    assert "#06111d" in qapp.styleSheet()
 
 
 @pytest.mark.desktop
 def test_chart_palette_follows_theme(qapp: QApplication) -> None:
     apply_theme(qapp, UiTheme.DARK)
     dark = chart_palette()
-    assert dark.background == "#1c1f26"
-    assert dark.muted == "#6b7080"
+    assert dark.background == "#091725"
+    assert dark.muted == "#7f9ab1"
     apply_theme(qapp, UiTheme.LIGHT)
     light = chart_palette()
     assert light.background == "#f7f5f2"

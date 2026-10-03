@@ -35,6 +35,7 @@ class TerminalPanel(QFrame):
     ) -> None:
         super().__init__()
         self.setObjectName("terminalPanel")
+        self.setAccessibleName(f"{title} terminal panel")
         self._content = content
         root = QVBoxLayout(self)
         root.setContentsMargins(8, 8, 8, 8)
@@ -49,13 +50,20 @@ class TerminalPanel(QFrame):
             chip = ExplainChip(explain_key)
             header.addWidget(chip)
         header.addStretch()
-        expand = QPushButton("⤢")
-        expand.setFixedSize(24, 24)
-        expand.setToolTip("Expand panel")
-        expand.clicked.connect(self.expand_requested.emit)
-        header.addWidget(expand)
+        self._focus = QPushButton("Focus")
+        self._focus.setObjectName("panelFocus")
+        self._focus.setCheckable(True)
+        self._focus.setToolTip("Focus this panel; click again to restore the layout")
+        self._focus.clicked.connect(self.expand_requested.emit)
+        header.addWidget(self._focus)
         root.addLayout(header)
         root.addWidget(content, 1)
+
+    def set_focused(self, focused: bool) -> None:
+        self._focus.blockSignals(True)
+        self._focus.setChecked(focused)
+        self._focus.setText("Restore" if focused else "Focus")
+        self._focus.blockSignals(False)
 
 
 class TerminalGrid(QWidget):
@@ -74,12 +82,15 @@ class TerminalGrid(QWidget):
         self._settings = settings
         self._outer = QSplitter(Qt.Orientation.Vertical)
         self._outer.setChildrenCollapsible(False)
+        self._outer.setHandleWidth(8)
+        self._outer.setOpaqueResize(True)
         self._row_splitters: list[QSplitter] = []
         self._panels: list[TerminalPanel] = []
         outer_layout = QVBoxLayout(self)
         outer_layout.setContentsMargins(0, 0, 0, 0)
         outer_layout.addWidget(self._outer)
         self._outer.splitterMoved.connect(self._on_splitter_moved)
+        self._focused_panel: TerminalPanel | None = None
 
     def set_panels(self, panels: list[TerminalPanel]) -> None:
         self._panels = panels
@@ -100,6 +111,8 @@ class TerminalGrid(QWidget):
         for row_panels in rows:
             row_splitter = QSplitter(Qt.Orientation.Horizontal)
             row_splitter.setChildrenCollapsible(False)
+            row_splitter.setHandleWidth(8)
+            row_splitter.setOpaqueResize(True)
             for panel in row_panels:
                 panel.expand_requested.connect(self._make_expand_handler(panel))
                 row_splitter.addWidget(panel)
@@ -109,6 +122,10 @@ class TerminalGrid(QWidget):
                 row_splitter.setStretchFactor(1, 1)
             self._row_splitters.append(row_splitter)
             self._outer.addWidget(row_splitter)
+
+        for splitter in [self._outer, *self._row_splitters]:
+            for index in range(1, splitter.count()):
+                splitter.handle(index).setToolTip("Drag to resize terminal panels")
 
         if len(rows) == 1:
             self._outer.setStretchFactor(0, 1)
@@ -156,6 +173,13 @@ class TerminalGrid(QWidget):
 
     def _make_expand_handler(self, panel: TerminalPanel) -> Callable[[], None]:
         def _expand() -> None:
+            if self._focused_panel is panel:
+                self.reset_layout()
+                return
+            if self._focused_panel is not None:
+                self._focused_panel.set_focused(False)
+            self._focused_panel = panel
+            panel.set_focused(True)
             for row_splitter in self._row_splitters:
                 sizes = []
                 for i in range(row_splitter.count()):
@@ -166,6 +190,15 @@ class TerminalGrid(QWidget):
             self.persist_layout()
 
         return _expand
+
+    def reset_layout(self) -> None:
+        if self._focused_panel is not None:
+            self._focused_panel.set_focused(False)
+            self._focused_panel = None
+        self._outer.setSizes([100] * self._outer.count())
+        for splitter in self._row_splitters:
+            splitter.setSizes([100] * splitter.count())
+        self.persist_layout()
 
 
 class WatchlistWidget(QTableWidget):
@@ -191,6 +224,9 @@ class WatchlistWidget(QTableWidget):
         self.setRowCount(len(rows))
         self.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        header = self.horizontalHeader()
+        header.setSectionsMovable(True)
+        header.setStretchLastSection(True)
 
         for r, row in enumerate(rows):
             mom = row.get("momentum_20")

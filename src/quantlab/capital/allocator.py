@@ -67,8 +67,6 @@ def assert_research_path(*, live_trading: bool) -> None:
         raise SafetyError(
             "Prompt 17 refuses to initialize production allocation while live_trading is true"
         )
-    assert live_trading is False
-    assert gates.live_trading is False
 
 
 def _integrity(flags: CapitalLeakFlags, *, live_trading: bool, data_kind: str) -> IntegrityReport:

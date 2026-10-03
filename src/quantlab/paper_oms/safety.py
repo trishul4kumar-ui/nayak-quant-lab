@@ -24,8 +24,6 @@ def assert_live_trading_disabled(*, live_trading: bool = False) -> None:
     gates = LiveSafetyGates()
     if live_trading or gates.live_trading:
         raise PaperSafetyError("paper OMS refuses to run while live_trading is true")
-    assert live_trading is False
-    assert gates.live_trading is False
 
 
 def assert_no_broker_credentials() -> None:
