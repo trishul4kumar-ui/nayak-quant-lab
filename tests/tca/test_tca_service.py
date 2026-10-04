@@ -139,6 +139,29 @@ def test_missing_volume_capacity_not_tested() -> None:
     assert "NSE ADV" in result.note or "Not NSE" in result.note
 
 
+def test_default_tca_never_promotes_seed_volume_to_liquidity() -> None:
+    result = run_tca(paper=_paper())
+    assert result.liquidity.volume is None
+    assert result.liquidity.status is CheckResult.NOT_TESTED
+    assert "typed liquidity" in result.liquidity.note.lower()
+
+
+def test_typed_liquidity_evidence_is_explicit() -> None:
+    result = run_tca(
+        TCARequest(
+            liquidity_observation=LiquidityObservation(
+                volume=1_000_000.0,
+                participation=0.05,
+                status=CheckResult.PASS,
+                note="Observed venue liquidity evidence, frozen for this test.",
+            )
+        ),
+        paper=_paper(),
+    )
+    assert result.liquidity.volume == 1_000_000.0
+    assert result.liquidity.status is CheckResult.PASS
+
+
 @pytest.mark.parametrize("capital", list(LADDER))
 def test_capacity_ladder_is_scenario(capital: float) -> None:
     assert capital in LADDER

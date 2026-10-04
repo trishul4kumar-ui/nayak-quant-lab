@@ -10,7 +10,9 @@ def wrap_page_scroll(page: QWidget) -> QScrollArea:
     scroll = QScrollArea()
     scroll.setObjectName("pageScroll")
     scroll.setWidgetResizable(True)
-    scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+    # Normal pages reflow first; a dense research surface may still require a
+    # local horizontal scroll bar.  Hiding it turns data loss into a visual bug.
+    scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
     scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
     scroll.setFrameShape(QScrollArea.Shape.NoFrame)
     scroll.setWidget(page)

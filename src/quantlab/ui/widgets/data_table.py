@@ -6,7 +6,7 @@ from collections.abc import Callable
 
 from PySide6.QtCore import QEvent, QObject, Qt
 from PySide6.QtGui import QColor, QKeyEvent
-from PySide6.QtWidgets import QTableWidget, QTableWidgetItem
+from PySide6.QtWidgets import QAbstractItemView, QHeaderView, QTableWidget, QTableWidgetItem
 
 from quantlab.app.settings_store import UiTheme
 from quantlab.ui.theme import active_ui_theme
@@ -52,8 +52,13 @@ def fill_table(
     table.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
     header = table.horizontalHeader()
     header.setSectionsMovable(True)
-    header.setStretchLastSection(True)
-    header.setDefaultSectionSize(max(header.defaultSectionSize(), 120))
+    header.setStretchLastSection(False)
+    header.setDefaultSectionSize(120)
+    table.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+    table.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+    table.setWordWrap(False)
+    table.setTextElideMode(Qt.TextElideMode.ElideRight)
+    table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
 
     for r, row in enumerate(rows):
         for c, cell in enumerate(row):
@@ -64,6 +69,9 @@ def fill_table(
             elif c in truncate_columns:
                 text = truncate_text(text, 20)
             item = QTableWidgetItem(text)
+            item.setToolTip(str(cell))
+            alignment = _column_alignment(headers[c])
+            item.setTextAlignment(alignment)
             if full_id:
                 item.setData(Qt.ItemDataRole.UserRole, full_id)
                 item.setForeground(QColor("#42a5f5"))
@@ -74,7 +82,55 @@ def fill_table(
                     item.setForeground(color)
                     item.setBackground(_result_background(text))
             table.setItem(r, c, item)
-    table.resizeColumnsToContents()
+    _apply_column_contract(table, headers)
+
+
+def _column_alignment(header: str) -> Qt.AlignmentFlag:
+    name = header.lower()
+    if any(token in name for token in ("status", "gate", "quality", "kind", "lifecycle")):
+        return Qt.AlignmentFlag.AlignCenter
+    if any(
+        token in name
+        for token in (
+            "return",
+            "sharpe",
+            "weight",
+            "price",
+            "volume",
+            "count",
+            "days",
+            "bps",
+            "pnl",
+            "gross",
+            "net",
+            "turnover",
+            "value",
+        )
+    ):
+        return Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
+    return Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
+
+
+def _apply_column_contract(table: QTableWidget, headers: list[str]) -> None:
+    """Use stable, readable defaults; users can still resize/reorder any header."""
+
+    header = table.horizontalHeader()
+    for index, label in enumerate(headers):
+        name = label.lower()
+        if any(token in name for token in ("note", "detail", "description", "reason")):
+            width, mode = 280, QHeaderView.ResizeMode.Stretch
+        elif any(token in name for token in ("timestamp", "as of", "time", "date")):
+            width, mode = 160, QHeaderView.ResizeMode.Interactive
+        elif any(token in name for token in ("identity", "hash", "id")):
+            width, mode = 140, QHeaderView.ResizeMode.Interactive
+        elif _column_alignment(label) & Qt.AlignmentFlag.AlignRight:
+            width, mode = 100, QHeaderView.ResizeMode.Interactive
+        elif any(token in name for token in ("status", "gate", "quality", "kind")):
+            width, mode = 105, QHeaderView.ResizeMode.Interactive
+        else:
+            width, mode = 140, QHeaderView.ResizeMode.Interactive
+        header.setSectionResizeMode(index, mode)
+        table.setColumnWidth(index, width)
 
 
 def fill_field_value_table(

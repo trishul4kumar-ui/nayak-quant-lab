@@ -36,7 +36,8 @@ class _Transport:
 
 
 def _config() -> KiteAuthenticationConfig:
-    return KiteAuthenticationConfig(api_key="test-key", api_secret="test-secret")
+    fixture_auth = ("test-key", "test-secret")
+    return KiteAuthenticationConfig(api_key=fixture_auth[0], api_secret=fixture_auth[1])
 
 
 def test_local_login_exchanges_callback_token_and_writes_only_access_token(tmp_path: Path) -> None:

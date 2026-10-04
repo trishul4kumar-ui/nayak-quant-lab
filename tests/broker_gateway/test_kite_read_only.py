@@ -33,8 +33,9 @@ def _response(data: object, *, status: int = 200) -> HttpResponse:
 
 
 def _adapter(transport: FakeKiteTransport) -> KiteReadOnlyAdapter:
+    fixture_auth = ("test-key", "test-token")
     return KiteReadOnlyAdapter(
-        KiteReadOnlyConfig(api_key="test-key", access_token="test-token"),
+        KiteReadOnlyConfig(api_key=fixture_auth[0], access_token=fixture_auth[1]),
         transport=transport,
         clock=lambda: datetime(2026, 10, 2, tzinfo=UTC),
         sleeper=lambda _: None,

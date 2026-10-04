@@ -1,0 +1,18 @@
+:root { color-scheme: dark; font-family: -apple-system, BlinkMacSystemFont, sans-serif; color: #d6e5ef; background: #08121f; }
+body { margin: 0; }
+main { padding: 16px; }
+header { display: flex; justify-content: space-between; gap: 12px; font-size: 10px; letter-spacing: .14em; color: #94aabd; }
+.stations { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; margin-top: 18px; }
+.station, .system { display: flex; flex-direction: column; gap: 8px; padding: 18px; border: 1px solid #294154; border-radius: 10px; background: #142536c9; text-align: left; color: inherit; }
+.station span, .system span { font-size: 11px; letter-spacing: .12em; }
+.bull span { color: #4bcfb6; } .bear span { color: #e9b479; }
+.station small { color: #94aabd; line-height: 1.5; }
+.system { align-items: center; justify-content: center; color: #7bbfee; }
+.system strong { font-size: 12px; }
+#scene { height: 180px; } canvas { width: 100%; height: 100%; }
+#fallback { font-size: 11px; color: #94aabd; }
+#evidence { padding-left: 0; list-style: none; }
+#evidence button { background: transparent; border: 1px solid #294154; padding: 10px; color: inherit; }
+button:focus-visible { outline: 2px solid #7bbfee; outline-offset: 3px; }
+@media(max-width: 700px) { .stations { grid-template-columns: 1fr 1fr; } .system { grid-column: 1 / -1; grid-row: 2; } header { flex-direction: column; } }
+@media(prefers-reduced-motion: reduce) { * { animation: none; transition: none; } }

@@ -13,12 +13,13 @@ from PySide6.QtWidgets import (
 )
 
 from quantlab.app.bootstrap import ApplicationRuntime
+from quantlab.app.broker_gateway import connect_payload
 from quantlab.app.live_ops import live_gate_rows
 from quantlab.ui.widgets.lab_shell import LabPageShell, StatusBadge
 
 
 class BrokerPage(LabPageShell):
-    """Connection wizard — stub adapters only; credentials never touch the UI."""
+    """Connection wizard for paper mode and the Kite read-only observer."""
 
     def __init__(self, runtime: ApplicationRuntime) -> None:
         super().__init__(
@@ -69,7 +70,8 @@ class BrokerPage(LabPageShell):
         layout.addWidget(head)
         hint = QLabel(
             "Paper is recommended while you learn the lab. "
-            "Zerodha and OpenAlgo remain stubbed until Prompt 18 OMS lands."
+            "Kite can observe an already-authenticated account, but it never receives "
+            "an order instruction from this application."
         )
         hint.setWordWrap(True)
         hint.setObjectName("nayakVoice")
@@ -79,7 +81,12 @@ class BrokerPage(LabPageShell):
         for idx, (adapter_id, title, detail) in enumerate(
             (
                 ("paper", "Paper (recommended)", "Simulated connectivity — no real orders."),
-                ("zerodha", "Zerodha Kite", "Stub — requires env credentials outside the UI."),
+                (
+                    "kite",
+                    "Zerodha Kite (read-only)",
+                    "Observe profile, balances, positions, holdings, orders, and trades. "
+                    "Requires KITE_API_KEY and KITE_ACCESS_TOKEN outside the UI.",
+                ),
                 ("openalgo", "OpenAlgo", "Stub — local bridge not wired in this build."),
             )
         ):
@@ -119,8 +126,16 @@ class BrokerPage(LabPageShell):
         self._connect_body = QLabel()
         self._connect_body.setWordWrap(True)
         self._connect_body.setObjectName("nayakVoice")
+        self._connect_action = QPushButton("Connect Kite (read-only)")
+        self._connect_action.setObjectName("primary")
+        self._connect_action.clicked.connect(self._connect_kite_read_only)
+        self._connection_detail = QLabel()
+        self._connection_detail.setWordWrap(True)
+        self._connection_detail.setObjectName("nayakVoice")
         layout.addWidget(self._connect_title)
         layout.addWidget(self._connect_body)
+        layout.addWidget(self._connect_action)
+        layout.addWidget(self._connection_detail)
         layout.addStretch()
         return page
 
@@ -181,12 +196,47 @@ class BrokerPage(LabPageShell):
                 "Connectivity flow complete for paper mode. "
                 "Orders still do not leave the lab — use Portfolio Lab to inspect demo targets."
             )
+            self._connect_action.setVisible(False)
+            self._connection_detail.clear()
+        elif adapter == "kite":
+            self._connect_title.setText("Kite read-only observer ready")
+            self._connect_body.setText(
+                "Use Connect Kite to verify the current environment-based session. "
+                "The check calls only the Kite profile endpoint. It does not load, display, "
+                "or save credentials, and does not place, alter, or cancel orders."
+            )
+            self._connect_action.setVisible(True)
+            self._connection_detail.setText("Not connected in this desktop session.")
         else:
             self._connect_title.setText(f"{adapter.title()} adapter selected (stub)")
             self._connect_body.setText(
                 "Adapter preference saved. Real connection requires env configuration "
                 "and every live safety gate — the UI cannot connect on its own."
             )
+            self._connect_action.setVisible(False)
+            self._connection_detail.clear()
+
+    def _connect_kite_read_only(self) -> None:
+        """Verify the session via Kite's GET-only profile endpoint."""
+        self.show_interaction_feedback("Action received: Kite read-only connection")
+        result = connect_payload(adapter="kite")
+        if error := result.get("error"):
+            self._connection_detail.setText(
+                f"Connection was not established: {error}. "
+                "Refresh the daily Kite access token, then try again."
+            )
+            self._status_badge.setText("KITE UNAVAILABLE")
+            return
+        state = str(result.get("state", "connected_read_only")).upper().replace("_", " ")
+        self._connection_detail.setText(
+            "Kite session verified. Open Broker Gateway Lab to capture a read-only account "
+            "snapshot or run reconciliation. Live trading and broker writes remain disabled."
+        )
+        self._status_badge.setText(state)
+        self._status_badge.setStyleSheet(
+            "background: #1a2e28; color: #26a69a; padding: 2px 8px; "
+            "border-radius: 4px; font-size: 11px; font-weight: 600;"
+        )
 
     def _update_nav(self) -> None:
         self._step_label.setText(f"Step {self._step + 1} of 3")
@@ -218,9 +268,12 @@ class BrokerPage(LabPageShell):
             )
         else:
             self._status_badge.setText("DISCONNECTED")
-        if prefs.broker_adapter:
+        # Older workspace settings recorded the former UI-only "zerodha" stub.
+        # Treat it as the actual Kite observer without writing or migrating any secret.
+        configured_adapter = "kite" if prefs.broker_adapter == "zerodha" else prefs.broker_adapter
+        if configured_adapter:
             for btn in self._adapter_group.buttons():
-                if btn.property("adapter_id") == prefs.broker_adapter:
+                if btn.property("adapter_id") == configured_adapter:
                     btn.setChecked(True)
                     break
         self._paint_gates()

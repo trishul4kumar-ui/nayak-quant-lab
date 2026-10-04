@@ -31,18 +31,26 @@ class ControlPlaneSqlite:
         self.path = path
         path.parent.mkdir(parents=True, exist_ok=True)
         self._lock = RLock()
+        self._closed = False
         self._connection = sqlite3.connect(
             str(path), check_same_thread=False, isolation_level=None, timeout=10.0
         )
         self._connection.row_factory = sqlite3.Row
-        self._connection.execute("PRAGMA journal_mode=WAL")
-        self._connection.execute("PRAGMA synchronous=FULL")
-        self._connection.execute("PRAGMA foreign_keys=ON")
-        self._migrate()
+        try:
+            self._connection.execute("PRAGMA journal_mode=WAL")
+            self._connection.execute("PRAGMA synchronous=FULL")
+            self._connection.execute("PRAGMA foreign_keys=ON")
+            self._migrate()
+        except Exception:
+            self._connection.close()
+            self._closed = True
+            raise
 
     def close(self) -> None:
         with self._lock:
-            self._connection.close()
+            if not self._closed:
+                self._connection.close()
+                self._closed = True
 
     def append(
         self,
@@ -144,15 +152,19 @@ class ControlPlaneSqlite:
     @contextmanager
     def _transaction(self) -> Iterator[sqlite3.Connection]:
         with self._lock:
+            if self._closed:
+                raise ControlPlaneStoreError("control-plane store is closed")
             try:
                 self._connection.execute("BEGIN IMMEDIATE")
                 yield self._connection
                 self._connection.execute("COMMIT")
             except sqlite3.Error as exc:
-                self._connection.execute("ROLLBACK")
+                if self._connection.in_transaction:
+                    self._connection.execute("ROLLBACK")
                 raise ControlPlaneStoreError(f"control-plane SQLite failure: {exc}") from exc
             except Exception:
-                self._connection.execute("ROLLBACK")
+                if self._connection.in_transaction:
+                    self._connection.execute("ROLLBACK")
                 raise
 
     def _migrate(self) -> None:

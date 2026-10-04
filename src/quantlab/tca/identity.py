@@ -35,6 +35,7 @@ def idempotency_key(
     arrival_policy: str,
     snapshot_id: str,
     model_version: str,
+    liquidity_evidence: dict[str, Any] | None = None,
 ) -> str:
     return _dump(
         {
@@ -43,5 +44,6 @@ def idempotency_key(
             "arrival_policy": arrival_policy,
             "snapshot_id": snapshot_id,
             "model_version": model_version,
+            "liquidity_evidence": liquidity_evidence or {},
         }
     )

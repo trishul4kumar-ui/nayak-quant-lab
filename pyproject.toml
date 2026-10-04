@@ -29,6 +29,9 @@ dev = [
     "mypy>=1.13",
     "pandas-stubs>=2.2",
 ]
+execution_gateway = [
+    "gunicorn>=23.0",
+]
 
 [project.scripts]
 quantlab = "quantlab.cli:main"

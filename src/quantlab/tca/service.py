@@ -91,6 +91,11 @@ def run_tca(
         arrival_policy=used.arrival_policy.value,
         snapshot_id=paper_result.run.snapshot_id,
         model_version="is-v1",
+        liquidity_evidence=(
+            None
+            if used.liquidity_observation is None
+            else used.liquidity_observation.model_dump(mode="json")
+        ),
     )
     cached = lookup(key)
     if cached is not None:
@@ -120,14 +125,12 @@ def run_tca(
         )
         for row in cost_components(schedule)
     ]
-    volumes = [v for v in (seed_snapshot().volumes or {}).values() if v]
-    volume = min(volumes) if volumes else None
-    liquidity = LiquidityObservation(
-        volume=volume,
-        participation=None,
-        spread=None,
-        status=CheckResult.NOT_TESTED if volume is None else CheckResult.PASS,
-        note="Synthetic snapshot volume. Not NSE ADV.",
+    liquidity = used.liquidity_observation or LiquidityObservation(
+        status=CheckResult.NOT_TESTED,
+        note=(
+            "No typed liquidity evidence was supplied. Capacity is NOT_TESTED; "
+            "paper/synthetic snapshot volume is never treated as NSE ADV."
+        ),
     )
     flags = flags.model_copy(update={"synthetic_adv_claim": False})
     calibration = None

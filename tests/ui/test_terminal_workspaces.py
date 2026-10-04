@@ -24,7 +24,7 @@ def qapp() -> QApplication:
     return app
 
 
-def test_every_lab_page_has_a_persisted_resizable_workspace(
+def test_flow_pages_are_not_implicitly_wrapped_in_nested_splitters(
     tmp_path: Path, qapp: QApplication
 ) -> None:
     runtime = bootstrap(data_dir=tmp_path)
@@ -33,7 +33,9 @@ def test_every_lab_page_has_a_persisted_resizable_workspace(
 
     shell_pages = [page for page in window._pages.values() if isinstance(page, LabPageShell)]
     assert shell_pages
-    assert all(page.has_terminal_layout() for page in shell_pages)
+    # Terminalization is opt-in.  Catalog/detail pages retain flowing layouts;
+    # dense pages own a local TerminalGrid where it is actually useful.
+    assert all(page._workspace_splitter is None for page in shell_pages)
     assert window.home._lower_splitter.count() == 2
     assert window.home._lower_splitter.handleWidth() == 8
     runtime.shutdown()
@@ -78,3 +80,17 @@ def test_terminal_panel_focus_toggles_and_restores(qapp: QApplication) -> None:
     first._focus.click()
     assert first._focus.text() == "Focus"
     assert not first._focus.isChecked()
+
+
+def test_panel_focus_survives_repeated_responsive_rebuilds(qapp: QApplication) -> None:
+    from quantlab.ui.responsive import responsive_state
+
+    first = TerminalPanel("First", QLabel("first"))
+    grid = TerminalGrid(columns=2)
+    grid.set_panels([first, TerminalPanel("Second", QLabel("second"))])
+    for width in (600, 1500, 600, 1500):
+        grid.apply_responsive_state(responsive_state(width))
+    first._focus.click()
+    assert first._focus.text() == "Restore"
+    first._focus.click()
+    assert first._focus.text() == "Focus"

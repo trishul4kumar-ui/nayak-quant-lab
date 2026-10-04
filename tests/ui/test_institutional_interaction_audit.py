@@ -123,6 +123,8 @@ def test_terminal_controls_have_visible_outcomes(tmp_path: Path, qapp: QApplicat
         assert window.compare._table.rowCount() > 0
 
         # Terminal panel focus has a reversible outcome.
+        _click_nav(window, "backtests")
+        qapp.processEvents()
         focus = backtest._terminal._panels[0]._focus
         QTest.mouseClick(focus, Qt.MouseButton.LeftButton)
         assert focus.text() == "Restore"

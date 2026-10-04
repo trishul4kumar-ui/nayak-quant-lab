@@ -21,6 +21,7 @@ venv/
 .pytest_cache/
 .ruff_cache/
 .coverage
+node_modules/
 htmlcov/
 *.cover
 
@@ -47,6 +48,10 @@ experiments/*.jsonl
 .idea/
 .vscode/
 *.swp
+
+# Packaged optional analyst visuals (built with the exact npm lockfile).
+!src/quantlab/ui/web/agent_desk/dist/
+!src/quantlab/ui/web/agent_desk/dist/**
 
 # Docker
 docker-compose.override.yml

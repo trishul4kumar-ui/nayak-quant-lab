@@ -30,9 +30,17 @@ def qapp() -> QApplication:
 
 
 def _nav_labels(window: MainWindow) -> list[str]:
-    """Strip keyboard shortcut hints from sidebar item text."""
-    raw = [window.nav.item(i).text() for i in range(window.nav.count())]
-    return [label.split("   ")[0] for label in raw]
+    """Return semantic labels in both expanded sidebar and compact icon-rail modes."""
+    labels: list[str] = []
+    for index in range(window.nav.count()):
+        item = window.nav.item(index)
+        text = item.text()
+        tooltip = item.toolTip()
+        if tooltip and len(text) <= 2:
+            labels.append(tooltip.split(" · ")[0])
+        else:
+            labels.append(text.split("   ")[0])
+    return labels
 
 
 @pytest.mark.desktop
@@ -187,7 +195,8 @@ def test_main_window_full_mode_nav(tmp_path: Path, qapp: QApplication) -> None:
     assert "READ-ONLY" in gateway_badge
     assert "NO ORDER ROUTING" in gateway_badge
     gateway_actions = [btn.text() for btn in gateway_page.findChildren(QPushButton)]
-    assert "RUN SNAPSHOT" in gateway_actions
+    assert "Connect" in gateway_actions
+    assert "Refresh snapshot" in gateway_actions
     assert not any(text == "LIVE" or text.startswith("SEND") for text in gateway_actions)
     rt_data_row = next(
         i for i in range(window.nav.count()) if _nav_labels(window)[i] == "Real-Time Data Lab"

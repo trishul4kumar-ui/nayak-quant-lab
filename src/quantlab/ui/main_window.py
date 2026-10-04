@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from PySide6.QtCore import Qt, QTimer
-from PySide6.QtGui import QAction, QCloseEvent, QKeySequence, QShortcut, QShowEvent
+from PySide6.QtGui import QAction, QCloseEvent, QKeySequence, QResizeEvent, QShortcut, QShowEvent
 from PySide6.QtWidgets import (
     QAbstractButton,
     QHBoxLayout,
@@ -45,6 +45,7 @@ from quantlab.ui.navigation import (
 )
 from quantlab.ui.page_scroll import wrap_page_scroll
 from quantlab.ui.pages.adaptive import AdaptivePage
+from quantlab.ui.pages.ai_quant_desk import AiQuantDeskPage
 from quantlab.ui.pages.ai_research import AiResearchPage
 from quantlab.ui.pages.alpha import AlphaPage
 from quantlab.ui.pages.backtest import BacktestPage
@@ -90,6 +91,7 @@ from quantlab.ui.pages.system import SystemPage
 from quantlab.ui.pages.tca_lab import TCALabPage
 from quantlab.ui.pages.test import BacktestWizardPage
 from quantlab.ui.pages.validation import ValidationPage
+from quantlab.ui.responsive import responsive_state
 from quantlab.ui.theme import apply_theme, stylesheet_for
 from quantlab.ui.widgets.breadcrumb_bar import BreadcrumbBar
 from quantlab.ui.widgets.catalog_page import CatalogLabPage
@@ -156,27 +158,35 @@ class MainWindow(QMainWindow):
 
         self._header_host = QWidget()
         self._header_host.setObjectName("topBar")
-        header = QHBoxLayout(self._header_host)
+        header = QVBoxLayout(self._header_host)
         header.setContentsMargins(16, 10, 16, 10)
-        header.setSpacing(10)
+        header.setSpacing(6)
+        header_top = QHBoxLayout()
+        header_top.setSpacing(10)
         brand_col = QVBoxLayout()
         brand_col.setSpacing(0)
         brand_col.addWidget(brand)
         brand_col.addWidget(brand_meta)
-        header.addLayout(brand_col)
-        header.addSpacing(12)
+        header_top.addLayout(brand_col)
+        header_top.addStretch()
+        self._experience_host = QWidget()
+        experience = QHBoxLayout(self._experience_host)
+        experience.setContentsMargins(0, 0, 0, 0)
+        experience.setSpacing(8)
+        experience.addWidget(self._guided_btn)
+        experience.addWidget(self._full_btn)
+        experience.addWidget(self._mode_badge)
+        self._version_tag = QLabel(f"v{runtime.version}")
+        self._version_tag.setObjectName("versionTag")
+        experience.addWidget(self._version_tag)
+        header_top.addWidget(self._experience_host)
+        header.addLayout(header_top)
         self._command_search = QLineEdit()
         self._command_search.setObjectName("commandSearch")
         self._command_search.setPlaceholderText("Search the lab or run a command  ·  ⌘K")
         self._command_search.setClearButtonEnabled(True)
         self._command_search.returnPressed.connect(self._open_command_palette)
-        header.addWidget(self._command_search, 1)
-        header.addWidget(self._guided_btn)
-        header.addWidget(self._full_btn)
-        header.addWidget(self._mode_badge)
-        version = QLabel(f"v{runtime.version}")
-        version.setObjectName("versionTag")
-        header.addWidget(version)
+        header.addWidget(self._command_search)
 
         self._safety_ribbon = QLabel()
         self._safety_ribbon.setObjectName("safetyRibbon")
@@ -239,6 +249,14 @@ class MainWindow(QMainWindow):
         self._nav_host.setFixedWidth(212)
         self._nav_host.setLayout(nav_column)
         self._nav_host.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Expanding)
+        self._effective_sidebar_collapsed = False
+        self._sidebar_search_active = False
+        self._nav_search.editingFinished.connect(self._finish_nav_search)
+        self._responsive_state = responsive_state(max(0, prefs.width - 212), prefs.height)
+        self._responsive_timer = QTimer(self)
+        self._responsive_timer.setSingleShot(True)
+        self._responsive_timer.setInterval(60)
+        self._responsive_timer.timeout.connect(self._apply_responsive_layout)
 
         self._base_nav_items: list[NavItem] = []
 
@@ -270,6 +288,7 @@ class MainWindow(QMainWindow):
             on_density_change=self._apply_density,
         )
         self.ai_research = AiResearchPage(runtime)
+        self.ai_quant_desk = AiQuantDeskPage(runtime)
         self.market = MarketPage(runtime)
         self.data = DataPage(runtime)
         self.backtest = BacktestPage(runtime, on_done=self._after_backtest)
@@ -370,17 +389,12 @@ class MainWindow(QMainWindow):
             "gateway": self.broker_gateway_lab,
             "reconcile": self.reconciliation_lab,
             "ai": self.ai_research,
+            "ai_quant_desk": self.ai_quant_desk,
             "experiments": self.experiments,
             "system": self.system,
             "logs": self.logs,
         }
         self._wire_catalog_empty_actions()
-        for key, widget in self._pages.items():
-            if isinstance(widget, LabPageShell):
-                widget.enable_terminal_layout(
-                    layout_id=f"workspace:{key}",
-                    settings=self.runtime.ui_settings,
-                )
         self._page_shells: dict[str, QScrollArea] = {}
         for key, widget in self._pages.items():
             shell = wrap_page_scroll(widget)
@@ -450,6 +464,9 @@ class MainWindow(QMainWindow):
         nav_menu.addAction(go_action)
         nav_menu.addAction(go_action_mac)
         nav_menu.addAction(filter_action)
+        reset_layout_action = QAction("Reset workspace layout", self)
+        reset_layout_action.triggered.connect(self._reset_workspace_layout)
+        menu.addAction(reset_layout_action)
 
         escape_clear = QShortcut(QKeySequence(Qt.Key.Key_Escape), self)
         escape_clear.activated.connect(self._clear_nav_search)
@@ -458,6 +475,7 @@ class MainWindow(QMainWindow):
         self._register_nav_shortcuts()
         self._update_nav_search_visibility()
         self._apply_sidebar_collapsed(prefs.sidebar_collapsed)
+        self._apply_responsive_layout()
         self._apply_live_chrome()
         self._apply_density_to_pages()
         self._refresh_context_strip()
@@ -505,6 +523,44 @@ class MainWindow(QMainWindow):
         for page in self._pages.values():
             if isinstance(page, LabPageShell):
                 page.apply_density(density)
+
+    def _schedule_responsive_layout(self) -> None:
+        self._responsive_timer.start()
+
+    def _apply_responsive_layout(self) -> None:
+        """Resolve one desktop layout state and distribute it to shared surfaces."""
+        content_width = max(0, self.width() - (56 if self._effective_sidebar_collapsed else 212))
+        state = responsive_state(content_width, self.height())
+        changed = state != self._responsive_state
+        self._responsive_state = state
+        effective_collapsed = (
+            self.runtime.ui_settings.current.sidebar_collapsed or state.sidebar_icon_rail
+        ) and not self._sidebar_search_active
+        if effective_collapsed != self._effective_sidebar_collapsed:
+            self._apply_sidebar_collapsed(self.runtime.ui_settings.current.sidebar_collapsed)
+            content_width = max(0, self.width() - (56 if effective_collapsed else 212))
+            state = responsive_state(content_width, self.height())
+            self._responsive_state = state
+        self._experience_host.setVisible(True)
+        if state.toolbar_stacked:
+            self._mode_badge.setVisible(False)
+            self._version_tag.setVisible(False)
+            self._full_btn.setText("Full")
+            self._guided_btn.setText("Guided")
+        else:
+            self._mode_badge.setVisible(True)
+            self._full_btn.setText("Full Lab")
+            self._guided_btn.setText("Guided Lab")
+        for page in self._pages.values():
+            apply = getattr(page, "apply_responsive_state", None)
+            if callable(apply):
+                apply(state)
+            for child in page.findChildren(QWidget):
+                child_apply = getattr(child, "apply_responsive_state", None)
+                if callable(child_apply):
+                    child_apply(state)
+        if changed:
+            self._rebuild_nav(select_key=self.runtime.ui_settings.current.nav, fire_nav=False)
 
     def _ack_notifications(self) -> None:
         self._notification_ack = len(self.runtime.notifications)
@@ -576,6 +632,20 @@ class MainWindow(QMainWindow):
             save = getattr(page, "save_terminal_layout", None)
             if callable(save):
                 save()
+
+    def _reset_workspace_layout(self) -> None:
+        """Recover readable defaults without touching research or credential state."""
+        for page in self._pages.values():
+            if isinstance(page, LabPageShell):
+                page.reset_terminal_layout()
+            for child in page.findChildren(QWidget):
+                reset = getattr(child, "reset_layout", None)
+                if callable(reset):
+                    reset()
+        self.home._lower_splitter.setSizes([100] * self.home._lower_splitter.count())
+        self.runtime.ui_settings.current.terminal_layouts = {}
+        self.runtime.ui_settings.save()
+        self.statusBar().showMessage("Workspace layout reset", 2400)
 
     def _set_experience_mode(self, mode: ExperienceMode) -> None:
         prefs = self.runtime.ui_settings.current
@@ -685,13 +755,18 @@ class MainWindow(QMainWindow):
 
     def _toggle_sidebar_collapsed(self) -> None:
         prefs = self.runtime.ui_settings.current
-        self._apply_sidebar_collapsed(not prefs.sidebar_collapsed)
         prefs.sidebar_collapsed = not prefs.sidebar_collapsed
         self.runtime.ui_settings.save()
+        self._apply_sidebar_collapsed(prefs.sidebar_collapsed)
+        self._schedule_responsive_layout()
 
     def _apply_sidebar_collapsed(self, collapsed: bool) -> None:
         prefs = self.runtime.ui_settings.current
-        if collapsed:
+        effective = (collapsed or self._responsive_state.sidebar_icon_rail) and not (
+            self._sidebar_search_active
+        )
+        self._effective_sidebar_collapsed = effective
+        if effective:
             self._nav_host.setFixedWidth(56)
             self.nav.setFixedWidth(48)
             self._nav_search.setVisible(False)
@@ -746,8 +821,15 @@ class MainWindow(QMainWindow):
     def _focus_nav_search(self) -> None:
         if self.runtime.ui_settings.current.experience_mode is ExperienceMode.GUIDED:
             self._set_experience_mode(ExperienceMode.FULL)
+        self._sidebar_search_active = True
+        self._apply_sidebar_collapsed(self.runtime.ui_settings.current.sidebar_collapsed)
+        self.activateWindow()
         self._nav_search.setFocus()
         self._nav_search.selectAll()
+
+    def _finish_nav_search(self) -> None:
+        self._sidebar_search_active = False
+        self._schedule_responsive_layout()
 
     def _clear_nav_search(self) -> None:
         if self._nav_search.hasFocus() and self._nav_search.text():
@@ -806,7 +888,7 @@ class MainWindow(QMainWindow):
         self._nav_keys = []
         self._row_to_key = []
         row_for_key: dict[str, int] = {}
-        collapsed = self.runtime.ui_settings.current.sidebar_collapsed
+        collapsed = self._effective_sidebar_collapsed
         status = self.runtime.status
         logs_err = self._logs_has_error()
 
@@ -1050,6 +1132,11 @@ class MainWindow(QMainWindow):
     def showEvent(self, event: QShowEvent) -> None:
         super().showEvent(event)
         clamp_to_screen(self)
+        self._schedule_responsive_layout()
+
+    def resizeEvent(self, event: QResizeEvent) -> None:  # noqa: N802
+        super().resizeEvent(event)
+        self._schedule_responsive_layout()
 
     def closeEvent(self, event: QCloseEvent) -> None:
         if self.runtime.mode is AppMode.LIVE:

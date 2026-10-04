@@ -24,6 +24,7 @@ class UiDensity(StrEnum):
 
 
 class UiSettings(BaseModel):
+    ui_layout_schema_version: int = 2
     width: int = 1280
     height: int = 800
     x: int | None = None
@@ -36,7 +37,7 @@ class UiSettings(BaseModel):
     milestones: list[str] = Field(default_factory=list)
     visited_pages: list[str] = Field(default_factory=list)
     journal_notes: dict[str, str] = Field(default_factory=dict)
-    terminal_layouts: dict[str, dict[str, list[int]]] = Field(default_factory=dict)
+    terminal_layouts: dict[str, dict[str, object]] = Field(default_factory=dict)
     last_lookback: int = 20
     last_top_n: int = 2
     last_cost_bps: float = 10.0
@@ -64,6 +65,9 @@ class UiSettingsStore:
             return UiSettings()
         if raw.nav == "dashboard":
             raw.nav = "home"
+        if raw.ui_layout_schema_version != 2:
+            raw.ui_layout_schema_version = 2
+            raw.terminal_layouts = {}
         return raw
 
     def save(self, settings: UiSettings | None = None) -> None:

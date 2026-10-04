@@ -4,6 +4,7 @@ from collections.abc import Callable
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
+    QBoxLayout,
     QFrame,
     QHBoxLayout,
     QLabel,
@@ -20,6 +21,7 @@ from quantlab.app.bootstrap import ApplicationRuntime
 from quantlab.app.chart_data import latest_equity, latest_run_metrics
 from quantlab.app.copy import SYNTHETIC_SHARPE_DISCLAIMER
 from quantlab.app.settings_store import ExperienceMode
+from quantlab.ui.responsive import ResponsiveState, valid_splitter_sizes
 from quantlab.ui.widgets.charts import DashboardStrip, SparklineWidget
 from quantlab.ui.widgets.lab_shell import data_kind_badge
 from quantlab.ui.widgets.pulse_panel import PulsePanel
@@ -84,7 +86,7 @@ class HomePage(QWidget):
         intent_sub.setObjectName("nayakVoice")
         intent_layout.addWidget(intent_head)
         intent_layout.addWidget(intent_sub)
-        intent_row = QHBoxLayout()
+        self._intent_row = QHBoxLayout()
         for label, intent_key in (
             ("Test an idea", "test"),
             ("Learn the workflow", "learn"),
@@ -93,8 +95,8 @@ class HomePage(QWidget):
             btn = QPushButton(label)
             btn.setObjectName("primary" if intent_key == "test" else "")
             btn.clicked.connect(lambda checked=False, key=intent_key: self._pick_intent(key))
-            intent_row.addWidget(btn)
-        intent_layout.addLayout(intent_row)
+            self._intent_row.addWidget(btn)
+        intent_layout.addLayout(self._intent_row)
         root.addWidget(self._intent_frame)
 
         self._focus_frame = QFrame()
@@ -171,8 +173,8 @@ class HomePage(QWidget):
         self._lower_splitter.addWidget(self._pulse)
         self._lower_splitter.handle(1).setToolTip("Drag to resize journal and system pulse")
         home_layout = runtime.ui_settings.current.terminal_layouts.get("workspace:home", {})
-        sizes = home_layout.get("lower")
-        if sizes and len(sizes) == self._lower_splitter.count():
+        sizes = valid_splitter_sizes(home_layout.get("lower"), self._lower_splitter.count())
+        if sizes is not None:
             self._lower_splitter.setSizes(sizes)
         else:
             self._lower_splitter.setSizes([3, 2])
@@ -192,6 +194,21 @@ class HomePage(QWidget):
         payload["lower"] = self._lower_splitter.sizes()
         layouts["workspace:home"] = payload
         self._runtime.ui_settings.save()
+
+    def apply_responsive_state(self, state: ResponsiveState) -> None:
+        """Keep the home dashboard legible instead of preserving a cramped two-pane view."""
+        direction = (
+            QBoxLayout.Direction.TopToBottom
+            if state.toolbar_stacked
+            else QBoxLayout.Direction.LeftToRight
+        )
+        self._intent_row.setDirection(direction)
+        desired_orientation = (
+            Qt.Orientation.Vertical if state.master_detail_vertical else Qt.Orientation.Horizontal
+        )
+        if self._lower_splitter.orientation() != desired_orientation:
+            self._lower_splitter.setOrientation(desired_orientation)
+            self._lower_splitter.setSizes([1, 1])
 
     def _set_data_kind_badge(self, data_kind: str | None) -> None:
         while self._data_kind_host.count():

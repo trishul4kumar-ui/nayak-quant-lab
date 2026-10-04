@@ -14,7 +14,7 @@ def clamp_to_screen(widget: QWidget) -> None:
         return
     available = screen.availableGeometry()
     width = min(max(widget.width(), 960), available.width())
-    height = min(max(widget.height(), 640), available.height())
+    height = min(max(widget.height(), 600), available.height())
     x = widget.x()
     y = widget.y()
     if x < available.left():

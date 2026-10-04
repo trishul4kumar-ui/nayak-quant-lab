@@ -133,10 +133,11 @@ def test_production_shadow_has_no_broker_write_path() -> None:
 
 
 def _provider_market() -> RealTimeSnapshot:
+    fixture_auth = ("fixture-key", "fixture-token")
     adapter = KiteMarketDataAdapter(
         KiteMarketDataConfig(
-            api_key="fixture-key",
-            access_token="fixture-token",
+            api_key=fixture_auth[0],
+            access_token=fixture_auth[1],
             symbols="NSE:INFY",
         ),
         transport=_QuoteTransport(),

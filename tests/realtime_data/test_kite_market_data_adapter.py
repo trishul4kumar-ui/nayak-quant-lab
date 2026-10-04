@@ -37,9 +37,10 @@ def _reset() -> None:
 
 
 def _config(symbols: str = "NSE:INFY,NSE:TCS") -> KiteMarketDataConfig:
+    fixture_auth = ("test-key", "test-token")
     return KiteMarketDataConfig(
-        api_key="test-key",
-        access_token="test-token",
+        api_key=fixture_auth[0],
+        access_token=fixture_auth[1],
         symbols=symbols,
     )
 

@@ -137,6 +137,7 @@ class TCARequest(BaseModel):
     calibrate: bool = False
     capacity_policy: CapacityPolicy | None = None
     user_benchmark_price: float | None = None
+    liquidity_observation: LiquidityObservation | None = None
 
 
 class TCAResult(BaseModel):

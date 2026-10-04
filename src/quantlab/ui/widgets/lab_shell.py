@@ -7,6 +7,7 @@ from contextlib import suppress
 
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtWidgets import (
+    QBoxLayout,
     QFrame,
     QHBoxLayout,
     QLabel,
@@ -18,6 +19,7 @@ from PySide6.QtWidgets import (
 )
 
 from quantlab.app.settings_store import UiDensity, UiSettingsStore
+from quantlab.ui.responsive import ResponsiveState, responsive_state, valid_splitter_sizes
 
 
 class StatusBadge(QLabel):
@@ -182,7 +184,10 @@ class LabPageShell(QWidget):
         outer = QVBoxLayout(self)
         self._outer = outer
 
-        header = QHBoxLayout()
+        header = QVBoxLayout()
+        header.setContentsMargins(0, 0, 0, 0)
+        header.setSpacing(6)
+        header_top = QHBoxLayout()
         title_col = QVBoxLayout()
         self._title = QLabel(title)
         self._title.setObjectName("pageTitle")
@@ -194,7 +199,7 @@ class LabPageShell(QWidget):
             sub.setWordWrap(True)
             sub.setStyleSheet("color: #9aa1ad; font-size: 13px;")
             title_col.addWidget(sub)
-        header.addLayout(title_col, 1)
+        header_top.addLayout(title_col, 1)
         self._interaction_status = QLabel("READY")
         self._interaction_status.setObjectName("pageActionStatus")
         self._interaction_status.setToolTip("The most recent action received by this workspace")
@@ -204,12 +209,18 @@ class LabPageShell(QWidget):
             "background: #173327; color: #4bd0a7; border: 1px solid #275343; "
             "border-radius: 4px; padding: 4px 8px; font-size: 10px; font-weight: 700;"
         )
-        header.addWidget(
+        header_top.addWidget(
             self._interaction_status,
             alignment=Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignRight,
         )
+        header.addLayout(header_top)
+        self._toolbar_host = QWidget()
         self._toolbar = QHBoxLayout()
-        header.addLayout(self._toolbar)
+        self._toolbar.setContentsMargins(0, 0, 0, 0)
+        self._toolbar.setSpacing(8)
+        self._toolbar.addStretch()
+        self._toolbar_host.setLayout(self._toolbar)
+        header.addWidget(self._toolbar_host)
         outer.addLayout(header)
 
         if nayak_summary:
@@ -228,6 +239,7 @@ class LabPageShell(QWidget):
         self._interaction_timer = QTimer(self)
         self._interaction_timer.setSingleShot(True)
         self._interaction_timer.timeout.connect(self._restore_ready_status)
+        self._responsive_state = responsive_state(1280)
         self._apply_density(UiDensity.COMFORTABLE)
 
     def apply_density(self, density: UiDensity) -> None:
@@ -247,7 +259,43 @@ class LabPageShell(QWidget):
         return self._body
 
     def add_toolbar_widget(self, widget: QWidget) -> None:
-        self._toolbar.addWidget(widget)
+        self._toolbar.insertWidget(max(0, self._toolbar.count() - 1), widget)
+
+    def apply_responsive_state(self, state: ResponsiveState) -> None:
+        """Apply shared page chrome policy without rebuilding page contents."""
+        if state == self._responsive_state:
+            return
+        self._responsive_state = state
+        self._toolbar.setDirection(
+            QBoxLayout.Direction.TopToBottom
+            if state.toolbar_stacked
+            else QBoxLayout.Direction.LeftToRight
+        )
+        self._toolbar.setAlignment(
+            Qt.AlignmentFlag.AlignLeft if state.toolbar_stacked else Qt.AlignmentFlag.AlignRight
+        )
+        self._toolbar_host.setVisible(self._toolbar.count() > 1)
+        self._outer.setContentsMargins(
+            8 if state.table_compact else 16,
+            8 if state.table_compact else 16,
+            8 if state.table_compact else 16,
+            8 if state.table_compact else 16,
+        )
+        for splitter in self.findChildren(QSplitter):
+            name = splitter.property("terminal_layout_name")
+            if name == "journal-detail":
+                desired = (
+                    Qt.Orientation.Vertical
+                    if state.master_detail_vertical
+                    else Qt.Orientation.Horizontal
+                )
+                if splitter.orientation() != desired:
+                    splitter.setOrientation(desired)
+                    splitter.setSizes([100] * splitter.count())
+
+    def resizeEvent(self, event: object) -> None:  # noqa: N802
+        self.apply_responsive_state(responsive_state(self.width(), self.height()))
+        super().resizeEvent(event)  # type: ignore[arg-type]
 
     def show_interaction_feedback(self, message: str) -> None:
         """Expose input acknowledgement inside the active workspace, not only the footer."""
@@ -270,11 +318,11 @@ class LabPageShell(QWidget):
         )
 
     def enable_terminal_layout(self, *, layout_id: str, settings: UiSettingsStore) -> None:
-        """Turn the completed page body into a persisted, vertically resizable workspace.
+        """Opt a dense page into a persisted, vertically resizable workspace.
 
         Pages continue to build with the familiar ``body()`` layout during construction.
-        The main window calls this after every page is complete, so the behaviour is
-        consistent without forcing each lab to hand-code splitter plumbing.
+        This is deliberately opt-in: a flowing catalog page should not gain nested
+        splitters simply because it shares this common chrome.
         """
         if self._workspace_splitter is not None:
             return
@@ -351,13 +399,22 @@ class LabPageShell(QWidget):
     def _persist_workspace_layout(self, *_args: object) -> None:
         if self._workspace_settings is None or self._workspace_layout_id is None:
             return
-        payload: dict[str, list[int]] = {}
+        payload: dict[str, object] = {
+            "schema_version": 2,
+            "viewport_width": self.width(),
+            "viewport_height": self.height(),
+        }
         if self._workspace_splitter is not None:
             payload["main"] = self._workspace_splitter.sizes()
         for splitter in self.findChildren(QSplitter):
             name = splitter.property("terminal_layout_name")
             if isinstance(name, str) and name:
                 payload[name] = splitter.sizes()
+                payload[f"{name}:orientation"] = (
+                    "vertical"
+                    if splitter.orientation() is Qt.Orientation.Vertical
+                    else "horizontal"
+                )
         self._workspace_settings.current.terminal_layouts[self._workspace_layout_id] = payload
         self._workspace_settings.save()
 
@@ -367,13 +424,17 @@ class LabPageShell(QWidget):
         layouts = self._workspace_settings.current.terminal_layouts
         payload = layouts.get(self._workspace_layout_id, {})
         if self._workspace_splitter is not None:
-            sizes = payload.get("main")
-            if sizes and len(sizes) == self._workspace_splitter.count():
+            sizes = valid_splitter_sizes(payload.get("main"), self._workspace_splitter.count())
+            if sizes is not None:
                 self._workspace_splitter.setSizes(sizes)
         for splitter in self.findChildren(QSplitter):
             name = splitter.property("terminal_layout_name")
             if not isinstance(name, str) or not name:
                 continue
-            sizes = payload.get(name)
-            if sizes and len(sizes) == splitter.count():
+            saved_orientation = payload.get(f"{name}:orientation")
+            current_orientation = (
+                "vertical" if splitter.orientation() is Qt.Orientation.Vertical else "horizontal"
+            )
+            sizes = valid_splitter_sizes(payload.get(name), splitter.count())
+            if sizes is not None and saved_orientation in {None, current_orientation}:
                 splitter.setSizes(sizes)

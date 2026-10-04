@@ -26,6 +26,7 @@ def main(argv: list[str] | None = None) -> int:
 
 
 def _run_desktop(argv: list[str] | None) -> int:
+    from PySide6.QtCore import QCoreApplication, Qt
     from PySide6.QtWidgets import QApplication
 
     from quantlab.app.bootstrap import bootstrap
@@ -36,6 +37,8 @@ def _run_desktop(argv: list[str] | None) -> int:
 
     data_env = os.environ.get("QUANT_LAB_DATA_DIR")
     runtime = bootstrap(data_dir=Path(data_env) if data_env else None)
+    if os.environ.get("QUANT_LAB_AGENT_VISUALS") == "1":
+        QCoreApplication.setAttribute(Qt.ApplicationAttribute.AA_ShareOpenGLContexts)
     app = QApplication(argv if argv is not None else sys.argv)
     app.setApplicationName("NAYAK QUANT LAB")
     app.setOrganizationName("NAYAK QUANT LAB")

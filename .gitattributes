@@ -1,0 +1,2 @@
+# Generated Three.js bundles contain GLSL strings; preserve shader whitespace.
+src/quantlab/ui/web/agent_desk/dist/assets/*.js -whitespace linguist-generated=true

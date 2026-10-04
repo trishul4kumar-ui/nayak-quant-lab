@@ -146,9 +146,15 @@ def run_backtest(
 
 
 def shared_calendar(bars: dict[InstrumentId, list[OHLCVBar]]) -> list[datetime]:
-    sets = [{b.pit.event_time for b in series} for series in bars.values()]
-    common = set.intersection(*sets) if sets else set()
-    return sorted(common)
+    """Return the exchange/session timeline, not an all-instrument intersection.
+
+    Universe membership and per-security availability are evaluated at each
+    session by ``build_cross_section``.  Requiring every instrument to print on
+    every date silently deleted valid market sessions whenever an IPO, delisting,
+    suspension, or temporary data gap occurred.
+    """
+    sessions = {bar.pit.event_time for series in bars.values() for bar in series}
+    return sorted(sessions)
 
 
 def _shared_calendar(bars: dict[InstrumentId, list[OHLCVBar]]) -> list[datetime]:

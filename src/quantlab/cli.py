@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 
 from quantlab.adaptive.cli import add_adaptive_parser, run_adaptive_command
+from quantlab.agents.cli import add_agents_parser, run_agents_command
 from quantlab.alpha.cli import add_alpha_parser, run_alpha_command
 from quantlab.broker_gateway.cli import add_broker_parser, run_broker_command
 from quantlab.capital.cli import add_capital_parser, run_capital_command
@@ -73,6 +74,7 @@ def main() -> None:
     sub.add_parser("slice", help="run the Day-1 momentum vertical slice")
     sub.add_parser("desktop", help="launch the QUANT LAB desktop application")
     add_data_parser(sub)
+    add_agents_parser(sub)
     add_feature_parser(sub)
     add_alpha_parser(sub)
     add_portfolio_parser(sub)
@@ -139,6 +141,8 @@ def main() -> None:
         raise SystemExit(desktop_main())
     elif args.cmd == "data":
         raise SystemExit(run_data_command(args))
+    elif args.cmd == "agents":
+        raise SystemExit(run_agents_command(args))
     elif args.cmd == "feature":
         raise SystemExit(run_feature_command(args))
     elif args.cmd == "alpha":

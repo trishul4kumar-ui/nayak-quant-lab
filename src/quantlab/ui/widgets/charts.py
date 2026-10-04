@@ -8,6 +8,7 @@ from PySide6.QtCore import QRect, Qt
 from PySide6.QtGui import QColor, QFont, QPainter, QPainterPath, QPaintEvent, QPen, QShowEvent
 from PySide6.QtWidgets import QFrame, QGridLayout, QLabel, QVBoxLayout, QWidget
 
+from quantlab.ui.responsive import ResponsiveState, responsive_state
 from quantlab.ui.theme import chart_palette
 
 SERIES_COLORS = ("#42a5f5", "#66bb6a", "#ffa726", "#ef5350", "#ab47bc", "#26c6da")
@@ -492,21 +493,21 @@ class KpiCard(QFrame):
 
 
 class DashboardStrip(QWidget):
-    """Row of KPI cards for page headers."""
+    """Responsive KPI strip that wraps cards instead of shrinking their content."""
 
     def __init__(self, titles: list[str]) -> None:
         super().__init__()
         self.setObjectName("dashboardStrip")
-        grid = QGridLayout(self)
-        grid.setContentsMargins(0, 0, 0, 0)
-        grid.setSpacing(8)
+        self._grid = QGridLayout(self)
+        self._grid.setContentsMargins(0, 0, 0, 0)
+        self._grid.setSpacing(8)
         self._cards: list[KpiCard] = []
-        for i, title in enumerate(titles):
+        self._columns = 0
+        for title in titles:
             card = KpiCard(title)
+            card.setMinimumWidth(180)
             self._cards.append(card)
-            grid.addWidget(card, 0, i)
-        for col in range(len(titles)):
-            grid.setColumnStretch(col, 1)
+        self._reflow(columns=len(titles))
 
     def card(self, index: int) -> KpiCard:
         return self._cards[index]
@@ -514,6 +515,26 @@ class DashboardStrip(QWidget):
     @property
     def cards(self) -> list[KpiCard]:
         return list(self._cards)
+
+    def apply_responsive_state(self, state: ResponsiveState) -> None:
+        self._reflow(columns=min(len(self._cards), state.kpi_columns))
+
+    def resizeEvent(self, event: object) -> None:  # noqa: N802
+        state = responsive_state(self.width(), self.height())
+        self.apply_responsive_state(state)
+        super().resizeEvent(event)  # type: ignore[arg-type]
+
+    def _reflow(self, *, columns: int) -> None:
+        columns = max(1, min(columns, len(self._cards)))
+        if columns == self._columns:
+            return
+        self._columns = columns
+        while self._grid.count():
+            self._grid.takeAt(0)
+        for index, card in enumerate(self._cards):
+            self._grid.addWidget(card, index // columns, index % columns)
+        for column in range(columns):
+            self._grid.setColumnStretch(column, 1)
 
 
 class LogTimelineWidget(QWidget):

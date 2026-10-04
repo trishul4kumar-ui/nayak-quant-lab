@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' qrc:; style-src 'self'; img-src 'self' data:; connect-src 'none'; object-src 'none'; frame-src 'none'; base-uri 'none'; form-action 'none'">
+  <title>Bull / Bear Research Stations</title>
+  <script src="qrc:///qtwebchannel/qwebchannel.js"></script>
+</head>
+<body>
+  <main>
+    <header><span>NAYAK / ANALYST STATIONS</span><span>RESEARCH · NO ORDER AUTHORITY</span></header>
+    <section class="stations" aria-label="Analyst states">
+      <button id="bull" class="station bull" type="button"><span>BULL</span><strong>IDLE</strong><small>No active run</small></button>
+      <div class="system"><span>FROZEN EVIDENCE</span><strong id="system-state">Waiting for native state</strong></div>
+      <button id="bear" class="station bear" type="button"><span>BEAR</span><strong>IDLE</strong><small>No active run</small></button>
+    </section>
+    <div id="scene" role="img" aria-label="Presentation of analyst states; native text contains the same information"></div>
+    <p id="fallback">Native analyst inspectors remain available.</p>
+    <ul id="evidence" aria-label="Evidence navigation"></ul>
+  </main>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
