@@ -16,5 +16,9 @@ header { display: flex; justify-content: space-between; gap: 12px; font-size: 10
 #evidence { padding-left: 0; list-style: none; }
 #evidence button { background: transparent; border: 1px solid #294154; padding: 10px; color: inherit; }
 button:focus-visible { outline: 2px solid #7bbfee; outline-offset: 3px; }
+#score-components { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 11px; color: #94aabd; }
+#score-components[hidden] { display: none; }
+#score-components label { display: flex; flex-direction: column; gap: 5px; }
+#score-components meter { width: 100%; accent-color: #7bbfee; }
 @media(max-width: 700px) { .stations { grid-template-columns: 1fr 1fr; } .system { grid-column: 1 / -1; grid-row: 2; } header { flex-direction: column; } }
 @media(prefers-reduced-motion: reduce) { * { animation: none; transition: none; } }

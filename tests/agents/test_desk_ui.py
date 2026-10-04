@@ -215,7 +215,7 @@ def test_native_independent_memos_to_bounded_debate_and_evidence_navigation(
         assert provider.calls == 8 and page._debate_choice.count() == 1
         presentation = json.loads(page._visual.bridge.presentation)
         debate = presentation["debate"]
-        assert debate["adjudication"] == "NOT_BUILT" and debate["edges"]
+        assert debate["adjudication"] == "NOT_EVALUATED" and debate["edges"]
         page._visual.bridge.navigate("open_debate", debate["transcript_hash"])
         assert page._tabs.currentWidget() is page._debate
         evidence = presentation["evidence"][0]["artifact_hash"]
@@ -232,6 +232,22 @@ def test_native_independent_memos_to_bounded_debate_and_evidence_navigation(
             QTest.qWait(25)
             page.refresh()
         assert page._job_id is None and provider.calls == 8  # saved transcript, no paid replay
+        page._tabs.setCurrentWidget(page._adjudication)
+        QTest.mouseClick(page._adjudication.run_button, Qt.MouseButton.LeftButton)
+        assert provider.calls == 8  # final decision makes no model call
+        assert "NO_TRADE" in page._adjudication.summary.text()
+        assert "REQUIRED_" in page._adjudication.details.toPlainText()
+        assert page._adjudication.components.topLevelItemCount() == 20
+        assert page._adjudication.history.count() == 1
+        decision = json.loads(page._visual.bridge.presentation)["adjudication"]
+        assert decision["no_trade"] and not decision["execution_authority"]
+        page._tabs.setCurrentWidget(page._bull)
+        page._visual.bridge.navigate("open_adjudication", decision["decision_hash"])
+        assert page._tabs.currentWidget() is page._adjudication
+        page._adjudication.splitter.setSizes([320, 400])
+        page._persist_workspace_layout()
+        layout = runtime.ui_settings.current.terminal_layouts["ai-quant-desk"]
+        assert layout["adjudication-workspace"] == page._adjudication.splitter.sizes()
     finally:
         page.close()
         runtime.shutdown()

@@ -23,8 +23,8 @@ never replaced with synthetic evidence or a completion claim.
 | 39 Foundation | Accepted | CI green for `3abef8f` |
 | 40 Bull | Accepted | CI green for `6aa8651`; 1,482 local tests passed |
 | 41 Bear | Accepted | CI green for `794b880`; 1,499 local tests passed |
-| 42 Debate | In progress | Bounded critique and immutable transcript release gates |
-| 43 Adjudication | Pending | Bounded debate accepted |
+| 42 Debate | Accepted | CI green for `167d8d4`; 1,517 local tests passed |
+| 43 Adjudication | In progress | Deterministic evidence policy and release checks |
 | 44 Levels | Pending | Deterministic evidence decision |
 | 45 Candidates | Pending | Complete immutable upstream lineage |
 | 46 Console | Pending | Candidate lifecycle and responsive UI |
@@ -116,4 +116,7 @@ Phase 41's release checks passed for `794b880` in
 [CI run 37196120100](https://github.com/trishul4kumar-ui/nayak-quant-lab/actions/runs/37196120100).
 The exact local checkout passed **1,499 tests in 423.65 seconds**, plus 223
 optimized-mode safety tests, Ruff, strict mypy and source/wheel builds. Phase 42
-began after this acceptance; Phase 43 still requires the bounded debate release gate.
+began after this acceptance. Phase 42's release checks then passed for `167d8d4` in
+[CI run 37199102925](https://github.com/trishul4kumar-ui/nayak-quant-lab/actions/runs/37199102925).
+The exact local checkout passed **1,517 tests in 475.36 seconds**. Phase 43 began
+only after that cloud acceptance. Phase 44 remains pending its adjudication release gate.

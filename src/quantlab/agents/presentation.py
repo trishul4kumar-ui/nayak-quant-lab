@@ -6,6 +6,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from quantlab.agents.adjudication_contracts import AdjudicationOutcome
 from quantlab.agents.contracts import AgentRole, AgentRunRecord, AgentState
 from quantlab.agents.debate_contracts import DebateStatus, EvidenceRelation
 
@@ -48,7 +49,31 @@ class DebateVisualDTO(BaseModel):
     critiques: int = Field(ge=0, le=2)
     rebuttals: int = Field(ge=0, le=2)
     edges: tuple[EvidenceEdgeDTO, ...] = Field(max_length=80)
-    adjudication: Literal["NOT_BUILT"] = "NOT_BUILT"
+    adjudication: Literal["NOT_EVALUATED"] = "NOT_EVALUATED"
+
+
+class ComponentVisualDTO(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+    role: AgentRole
+    name: str
+    status: str
+    value: float | None = Field(default=None, ge=0, le=1)
+    points: float = Field(ge=0, le=100)
+
+
+class AdjudicationVisualDTO(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+    decision_hash: str = Field(pattern=r"^[a-f0-9]{64}$")
+    transcript_hash: str = Field(pattern=r"^[a-f0-9]{64}$")
+    outcome: AdjudicationOutcome
+    no_trade: bool
+    bull_score: float = Field(ge=0, le=100)
+    bear_score: float = Field(ge=0, le=100)
+    blocker_count: int = Field(ge=0)
+    expired: bool
+    components: tuple[ComponentVisualDTO, ...] = Field(max_length=24)
+    warnings: tuple[str, ...] = Field(max_length=20)
+    execution_authority: Literal[False] = False
 
 
 class AgentDeskPresentationService:

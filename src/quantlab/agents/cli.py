@@ -5,6 +5,8 @@ import json
 from datetime import UTC, datetime
 from pathlib import Path
 
+from quantlab.agents.adjudication_contracts import AdjudicationDecision
+from quantlab.agents.adjudication_service import run_adjudication, verify_adjudication
 from quantlab.agents.bear import BearWorker, bear_mandate, create_bear_context, search_bear_history
 from quantlab.agents.bull import BullWorker, bull_mandate, create_bull_context, search_bull_history
 from quantlab.agents.contracts import AgentRole, AgentRunRecord, AgentState, ResearchMode
@@ -34,6 +36,8 @@ def add_agents_parser(sub: argparse._SubParsersAction[argparse.ArgumentParser]) 
             "bear-history",
             "run-debate",
             "debate-history",
+            "adjudicate",
+            "adjudication-history",
         ),
     )
     parser.add_argument("--run-id")
@@ -44,6 +48,7 @@ def add_agents_parser(sub: argparse._SubParsersAction[argparse.ArgumentParser]) 
     parser.add_argument("--bull-memo")
     parser.add_argument("--bear-memo")
     parser.add_argument("--rebuttals", action="store_true")
+    parser.add_argument("--transcript")
 
 
 def run_agents_command(args: argparse.Namespace) -> int:
@@ -63,7 +68,22 @@ def _run_agents_command(args: argparse.Namespace) -> int:
     try:
         provider = configured_provider()
         mandate = bull_mandate(datetime(2026, 10, 4, tzinfo=UTC))
-        if args.agents_action == "run-debate":
+        if args.agents_action == "adjudicate":
+            if not args.transcript:
+                raise ValueError("EXPLICIT_TRANSCRIPT_REQUIRED")
+            decision = run_adjudication(repository, args.transcript, now=datetime.now(UTC))
+            payload: object = decision.model_dump(mode="json")
+            exit_code = 2 if decision.no_trade else 0
+        elif args.agents_action == "adjudication-history":
+            decisions = repository.list(AdjudicationDecision)[-100:]
+            for decision in decisions:
+                verify_adjudication(repository, decision)
+            payload = [
+                row.model_dump(mode="json")
+                for row in decisions
+                if not args.query or args.query.casefold() in row.model_dump_json().casefold()
+            ]
+        elif args.agents_action == "run-debate":
             if not args.bull_memo or not args.bear_memo:
                 raise ValueError("EXPLICIT_INITIAL_MEMOS_REQUIRED")
             session = create_debate(
@@ -76,7 +96,7 @@ def _run_agents_command(args: argparse.Namespace) -> int:
             transcript = DebateWorker(repository, {role: provider for role in AgentRole}).run(
                 session
             )
-            payload: object = transcript.model_dump(mode="json")
+            payload = transcript.model_dump(mode="json")
             exit_code = 0 if transcript.status is DebateStatus.COMPLETE else 2
         elif args.agents_action == "debate-history":
             transcripts = repository.list(DebateTranscript)[-100:]

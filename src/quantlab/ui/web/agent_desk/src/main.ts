@@ -112,6 +112,22 @@ function display(dto: DeskDTO): void {
     ? `${dto.debate.status} · ${dto.debate.critiques} critiques / ${dto.debate.rebuttals} rebuttals`
     : "Native state connected";
   document.querySelector<HTMLButtonElement>("#debate-transcript")!.disabled = !dto.debate;
+  const decision = dto.adjudication;
+  document.querySelector("#adjudication")!.textContent = decision
+    ? `${decision.outcome} · ${decision.no_trade ? "NO_TRADE" : "RESEARCH ONLY"} · Bull ${decision.bull_score.toFixed(2)} / Bear ${decision.bear_score.toFixed(2)} · ${decision.blocker_count} blockers${decision.expired ? " · EXPIRED" : ""}`
+    : "Deterministic adjudication not evaluated";
+  const scores = document.querySelector<HTMLElement>("#score-components")!;
+  scores.replaceChildren();
+  scores.hidden = !decision;
+  for (const component of decision?.components ?? []) {
+    const label = document.createElement("label"), meter = document.createElement("meter");
+    label.textContent = `${component.role} · ${component.name} · ${component.status}`;
+    meter.min = 0; meter.max = 1; meter.value = component.value ?? 0;
+    meter.setAttribute("aria-label", `${component.role} ${component.name}: ${component.status}`);
+    label.append(meter); scores.append(label);
+  }
+  document.querySelector("#decision-warnings")!.textContent = decision
+    ? `${decision.warnings.join(" · ")} · NO EXECUTION AUTHORITY` : "";
   const evidence = document.querySelector("#evidence")!;
   evidence.replaceChildren();
   for (const item of dto.evidence) {
@@ -128,7 +144,8 @@ function display(dto: DeskDTO): void {
 document.querySelector("#bull")!.addEventListener("click", () => navigate("select_agent", "BULL"));
 document.querySelector("#bear")!.addEventListener("click", () => navigate("select_agent", "BEAR"));
 document.querySelector("#debate-transcript")!.addEventListener("click", () => {
-  if (latest?.debate) navigate("open_debate", latest.debate.transcript_hash);
+  if (latest?.adjudication) navigate("open_adjudication", latest.adjudication.decision_hash);
+  else if (latest?.debate) navigate("open_debate", latest.debate.transcript_hash);
 });
 document.addEventListener("visibilitychange", () => { if (!document.hidden) render?.(); });
 window.addEventListener("pagehide", () => dispose?.());

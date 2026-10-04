@@ -12,12 +12,14 @@
     <header><span>NAYAK / ANALYST STATIONS</span><span>RESEARCH · NO ORDER AUTHORITY</span></header>
     <section class="stations" aria-label="Analyst states">
       <button id="bull" class="station bull" type="button"><span>BULL</span><strong>IDLE</strong><small>No active run</small></button>
-      <button id="debate-transcript" class="system" type="button" disabled><span>FROZEN EVIDENCE</span><strong id="system-state">Waiting for native state</strong><small id="adjudication">Adjudication not built yet</small></button>
+      <button id="debate-transcript" class="system" type="button" disabled><span>FROZEN EVIDENCE · NO EXECUTION AUTHORITY</span><strong id="system-state">Waiting for native state</strong><small id="adjudication">Deterministic adjudication not evaluated</small></button>
       <button id="bear" class="station bear" type="button"><span>BEAR</span><strong>IDLE</strong><small>No active run</small></button>
     </section>
     <div id="scene" role="img" aria-label="Presentation of analyst states; native text contains the same information"></div>
     <p id="fallback">Native analyst inspectors remain available.</p>
     <p class="legend">Green: analyst support · amber: analyst contradiction · grey: critique/request · interpretations unverified. Select a node to inspect canonical evidence; the native transcript is always available.</p>
+    <section id="score-components" aria-label="Neutral canonical evidence score components" hidden></section>
+    <p id="decision-warnings" class="legend"></p>
     <ul id="evidence" aria-label="Evidence navigation"></ul>
   </main>
   <script type="module" src="/src/main.ts"></script>

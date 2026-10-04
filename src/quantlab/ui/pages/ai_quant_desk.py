@@ -21,6 +21,8 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from quantlab.agents.adjudication_contracts import AdjudicationDecision, FrozenAdjudicationInput
+from quantlab.agents.adjudication_service import run_adjudication, verify_adjudication
 from quantlab.agents.bear import BearWorker, bear_mandate, create_bear_context, search_bear_history
 from quantlab.agents.bull import BullWorker, bull_mandate, create_bull_context, search_bull_history
 from quantlab.agents.contracts import (
@@ -34,8 +36,10 @@ from quantlab.agents.debate import DebateWorker, create_debate, verify_transcrip
 from quantlab.agents.debate_contracts import DebateTranscript, FrozenCritique, FrozenRebuttal
 from quantlab.agents.inputs import read_history, read_snapshot
 from quantlab.agents.presentation import (
+    AdjudicationVisualDTO,
     AgentDeskPresentationService,
     AgentVisualStateDTO,
+    ComponentVisualDTO,
     DebateVisualDTO,
     EvidenceEdgeDTO,
     EvidenceNodeSummaryDTO,
@@ -49,6 +53,7 @@ from quantlab.ai.permissions import DENIED_CAPABILITIES
 from quantlab.app.bootstrap import ApplicationRuntime
 from quantlab.app.jobs import Job, JobStatus
 from quantlab.realtime_data.service import inspect as inspect_snapshot
+from quantlab.ui.widgets.adjudication_workspace import AdjudicationWorkspace
 from quantlab.ui.widgets.agent_desk_webview import AgentDeskWebView
 from quantlab.ui.widgets.analyst_workspace import AnalystWorkspace
 from quantlab.ui.widgets.lab_shell import LabPageShell
@@ -72,6 +77,7 @@ class AiQuantDeskPage(LabPageShell):
         self._debate_job = False
         self._active_debate_id: str | None = None
         self._selected_debate: str | None = None
+        self._selected_decision: str | None = None
         self._status = QLabel()
         self._status.setObjectName("deskProviderStatus")
         self._status.setWordWrap(True)
@@ -122,6 +128,10 @@ class AiQuantDeskPage(LabPageShell):
         debate_layout.addWidget(debate_splitter, 1)
         self._tabs.addTab(self._debate, "Debate Arena")
         self._inspectors["Debate"] = self._transcript
+        self._adjudication = AdjudicationWorkspace()
+        self._adjudication.run_button.clicked.connect(self._run_adjudication)
+        self._adjudication.history.currentIndexChanged.connect(self._choose_adjudication)
+        self._tabs.addTab(self._adjudication, "Adjudication")
         for name in ("Permissions", "Tools", "Audit"):
             inspector = QTextBrowser()
             inspector.setOpenExternalLinks(False)
@@ -161,6 +171,7 @@ class AiQuantDeskPage(LabPageShell):
         self.register_splitter(self._bear.main_splitter, "bear-workspace")
         self.register_splitter(self._bear.evidence_splitter, "bear-evidence")
         self.register_splitter(debate_splitter, "debate-workspace")
+        self.register_splitter(self._adjudication.splitter, "adjudication-workspace")
         self.bind_splitter_preferences(layout_id="ai-quant-desk", settings=runtime.ui_settings)
         self.refresh()
 
@@ -170,6 +181,10 @@ class AiQuantDeskPage(LabPageShell):
         elif intent == "open_debate":
             self._selected_debate = identity
             self._tabs.setCurrentWidget(self._debate)
+            self.refresh()
+        elif intent == "open_adjudication":
+            self._selected_decision = identity
+            self._tabs.setCurrentWidget(self._adjudication)
             self.refresh()
         elif intent == "open_evidence":
             try:
@@ -347,7 +362,98 @@ class AiQuantDeskPage(LabPageShell):
         identity = self._debate_choice.currentData()
         if isinstance(identity, str):
             self._selected_debate = identity
+            self._selected_decision = None
             self.refresh()
+
+    def _run_adjudication(self) -> None:
+        self._tabs.setCurrentWidget(self._adjudication)
+        if self._job_id:
+            self._adjudication.summary.setText("BLOCKED · finish or cancel the active research job")
+            return
+        identity = self._debate_choice.currentData()
+        if not isinstance(identity, str):
+            self._adjudication.summary.setText("BLOCKED · select a frozen debate transcript first")
+            return
+        repository = None
+        try:
+            repository = AgentRepository(self._repo_path)
+            decision = run_adjudication(repository, identity, now=datetime.now(UTC))
+            self._selected_decision = decision.content_hash
+            self.refresh()
+        except (OSError, RuntimeError, ValueError, KeyError):
+            self._adjudication.summary.setText(
+                "BLOCKED · evidence or persistence could not be verified"
+            )
+            self._adjudication.components.clear()
+            self._adjudication.details.clear()
+        finally:
+            if repository:
+                repository.close()
+
+    def _choose_adjudication(self, _: int) -> None:
+        identity = self._adjudication.history.currentData()
+        if isinstance(identity, str):
+            self._selected_decision = identity
+            self.refresh()
+
+    def _refresh_adjudication(
+        self, repository: AgentRepository, transcript: DebateTranscript | None
+    ) -> AdjudicationVisualDTO | None:
+        choices = repository.list(AdjudicationDecision)[-100:]
+        if transcript:
+            choices = tuple(
+                row for row in choices if row.transcript_hash == transcript.content_hash
+            )
+        self._adjudication.history.blockSignals(True)
+        self._adjudication.history.clear()
+        for row in choices:
+            self._adjudication.history.addItem(
+                f"{row.outcome} · {row.content_hash[:8]}", row.content_hash
+            )
+        selected = next(
+            (row for row in choices if row.content_hash == self._selected_decision),
+            choices[-1] if choices else None,
+        )
+        dto = None
+        if selected:
+            verify_adjudication(repository, selected)
+            frame = repository.get(selected.input_hash, FrozenAdjudicationInput)
+            current = datetime.now(UTC)
+            expired = current >= frame.expires_at or (
+                frame.mode is not ResearchMode.REPLAY
+                and (current - frame.as_of).total_seconds() > 300
+            )
+            self._adjudication.history.setCurrentIndex(
+                self._adjudication.history.findData(selected.content_hash)
+            )
+            self._adjudication.display(selected, expired=expired)
+            dto = AdjudicationVisualDTO(
+                decision_hash=selected.content_hash,
+                transcript_hash=selected.transcript_hash,
+                outcome=selected.outcome,
+                no_trade=selected.no_trade,
+                bull_score=selected.bull_score,
+                bear_score=selected.bear_score,
+                blocker_count=len(selected.hard_blockers),
+                expired=expired,
+                components=tuple(
+                    ComponentVisualDTO(
+                        role=row.role,
+                        name=row.name,
+                        status=row.status,
+                        value=row.normalized_value,
+                        points=row.points,
+                    )
+                    for row in selected.score_components
+                ),
+                warnings=selected.warnings,
+            )
+        else:
+            self._adjudication.summary.setText("No adjudication for selected transcript · NO_TRADE")
+            self._adjudication.components.clear()
+            self._adjudication.details.clear()
+        self._adjudication.history.blockSignals(False)
+        return dto
 
     def _show_transcript(self, repository: AgentRepository, transcript: DebateTranscript) -> None:
         verify_transcript(repository, transcript)
@@ -596,7 +702,10 @@ class AiQuantDeskPage(LabPageShell):
                             else state
                             for state in states
                         ]
-                self._visual.bridge.publish(tuple(states), tuple(evidence[:40]), debate_dto)
+                decision_dto = self._refresh_adjudication(repository, selected)
+                self._visual.bridge.publish(
+                    tuple(states), tuple(evidence[:40]), debate_dto, decision_dto
+                )
             finally:
                 repository.close()
         except (OSError, RuntimeError, ValueError, KeyError):
@@ -606,6 +715,12 @@ class AiQuantDeskPage(LabPageShell):
             self._debate_choice.clear()
             self._debate_choice.blockSignals(False)
             self._falsification.clear()
+            self._adjudication.summary.setText("BLOCKED · saved adjudication could not be verified")
+            self._adjudication.components.clear()
+            self._adjudication.details.clear()
+            self._adjudication.history.blockSignals(True)
+            self._adjudication.history.clear()
+            self._adjudication.history.blockSignals(False)
             for inspector in self._inspectors.values():
                 inspector.setPlainText("Persistence unavailable. Research runs are blocked.")
             self._visual.bridge.publish(

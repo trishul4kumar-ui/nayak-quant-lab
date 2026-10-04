@@ -1,7 +1,9 @@
 # Phase 42 — Adversarial debate and falsification
 
-Started after Phase 41's published CI acceptance for `794b880`. Implementation is
-undergoing release checks; Phase 43 must not begin until those gates pass.
+Started after Phase 41's published CI acceptance for `794b880`. Accepted after all
+published release checks passed for `167d8d4` in
+[CI run 37199102925](https://github.com/trishul4kumar-ui/nayak-quant-lab/actions/runs/37199102925).
+Phase 43 began only after that acceptance.
 
 Added strict critique/rebuttal drafts, a fixed 42-v1 protocol, same-boundary session
 creation, parent-bound role contexts, permanent run claims and immutable transcripts
@@ -34,8 +36,9 @@ broker token, tool methods or order APIs. Adjudication is explicitly NOT_BUILT.
   provider, expiry, mixed snapshots, source-equivalent history timestamps, new
   snapshot identity, interrupted claims, hash/restart verification, re-sealed forged
   PASS/target rejection, CLI history and native end-to-end controls/navigation.
-- Source/wheel distributions built. Full regression and published CI gates are
-  pending. No real model/broker call, live order or safety-flag change was used.
+- Source/wheel distributions built. Exact local full regression: **1,517 passed
+  in 475.36 seconds**. All published CI gates passed for commit `167d8d4`.
+  No real model/broker call, live order or safety-flag change was used.
 - Native Chromium QA rendered one WebGL canvas and 18 shared evidence controls
   from a clearly labelled synthetic fixture (two critiques/two rebuttals, eight
   total fixture calls including initials). An actual pointer click on the first
