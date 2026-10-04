@@ -59,6 +59,12 @@ rank/invertibility threshold, preserves rejection of genuinely ill-scaled asset
 variances, and tests both signs of null-eigenvalue roundoff. A fresh cloud gate is
 required before Phase 40 begins.
 
+The covariance rerun passed the full suite, but its optimized-mode selection
+exposed test-order leakage: a preceding production-shadow test left failed
+upstream evidence in process-global stores. The missing-evidence authorization
+fixture now resets all its upstream stores. A separate regression asserts that
+an actual global kill still produces `BLOCKED`; no production safety rule changed.
+
 Phases 40–53 have not been implemented. Resume with Phase 40 only after this gate
 passes; phase 53 additionally requires the separately documented durability work,
 sustained real production-shadow evidence, and explicit human execution controls.

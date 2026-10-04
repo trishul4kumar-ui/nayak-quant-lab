@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 
+from quantlab.broker_gateway.service import reset_for_tests as reset_broker
 from quantlab.execution_authorization.models import (
     AuthorizationAssessment,
     AuthorizationPolicy,
@@ -13,12 +14,25 @@ from quantlab.execution_authorization.models import (
 )
 from quantlab.execution_authorization.repository import reset_for_tests
 from quantlab.execution_authorization.service import approval_valid, approve, assess, revoke
+from quantlab.production_shadow.repository import reset_for_tests as reset_shadow
 from quantlab.realtime_data.hashing import sha256
+from quantlab.reconciliation.repository import reset_for_tests as reset_reconciliation
+from quantlab.release.service import reset_for_tests as reset_release
+from quantlab.safety.kill_switch import activate
+from quantlab.safety.models import KillScope
+from quantlab.safety.service import reset_for_tests as reset_safety
 
 
 @pytest.fixture(autouse=True)
 def _reset() -> None:
     reset_for_tests()
+    # These are process-global upstream stores. A preceding shadow test may leave
+    # failed evidence behind; that is not the missing-evidence scenario below.
+    reset_broker()
+    reset_shadow()
+    reset_reconciliation()
+    reset_release()
+    reset_safety()
 
 
 def _scope() -> AuthorizationScope:
@@ -64,6 +78,15 @@ def test_default_assessment_is_blocked_when_critical_evidence_is_missing() -> No
     result = assess(_scope())
     assert result.state is AuthorizationState.INELIGIBLE
     assert "release_certification" in result.blockers
+    assert result.live_trading is False
+    assert result.broker_write_enabled is False
+
+
+def test_failed_safety_evidence_is_blocked_not_merely_ineligible() -> None:
+    activate(KillScope.GLOBAL, reason="test incident")
+    result = assess(_scope())
+    assert result.state is AuthorizationState.BLOCKED
+    assert "kill_switch" in result.blockers
     assert result.live_trading is False
     assert result.broker_write_enabled is False
 
