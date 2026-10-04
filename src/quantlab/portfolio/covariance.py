@@ -134,6 +134,7 @@ def covariance_cache_key(
 ) -> str:
     return config_hash(
         {
+            "covariance_implementation": "spectral-tolerance-v2",
             "snapshot_id": snapshot_id,
             "names": sorted(names),
             "as_of": as_of.isoformat(),
@@ -186,12 +187,12 @@ def _finalize(
     extra: dict[str, float | None],
     note: str,
 ) -> CovarianceReport:
+    if cov.shape != (len(names), len(names)) or not np.isfinite(cov).all():
+        raise CovarianceError("covariance must be a finite square matrix matching names")
     cov = 0.5 * (cov + cov.T)
     eigs = np.linalg.eigvalsh(cov)
     min_eig = float(eigs[0])
     max_eig = float(eigs[-1])
-    rank = int(np.sum(eigs > 1e-12))
-    cond = None if min_eig <= 0 else max_eig / min_eig
     psd = min_eig >= -1e-10
     used_repair = "none"
     if not psd:
@@ -204,11 +205,25 @@ def _finalize(
         eigs = np.linalg.eigvalsh(cov)
         min_eig = float(eigs[0])
         max_eig = float(eigs[-1])
-        cond = None if min_eig <= 0 else max_eig / min_eig
         psd = min_eig >= -1e-10
         used_repair = "eigenvalue_clip"
+    # A null eigenvalue can land a few ulps on either side of zero depending
+    # on LAPACK/platform. Use the same scale-aware threshold for rank and
+    # invertibility; never turn that rounding noise into a huge condition number.
+    tolerance = np.finfo(np.float64).eps * len(eigs) * max(abs(max_eig), abs(min_eig))
+    rank = int(np.sum(eigs > tolerance))
+    cond = None if min_eig <= tolerance else max_eig / min_eig
+    # Retain rejection of genuinely ill-scaled asset variances even when a
+    # positive variance is below the spectral resolution of the whole matrix.
+    positive_variances = np.diag(cov)[np.diag(cov) > 0]
+    if len(positive_variances) > 1 and (
+        float(positive_variances.max()) / float(positive_variances.min()) > 1e12
+    ):
+        raise CovarianceError("ill-conditioned covariance; asset variance scale exceeds limit")
     if cond is not None and cond > 1e12:
         raise CovarianceError(f"ill-conditioned covariance; cond={cond}")
+    if rank < len(names):
+        note += "; numerically singular PSD matrix; not directly invertible"
     return CovarianceReport(
         names=names,
         matrix=[[float(x) for x in row] for row in cov.tolist()],

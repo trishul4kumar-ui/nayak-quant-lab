@@ -64,6 +64,31 @@ def test_ill_conditioned_covariance_fails() -> None:
         )
 
 
+@pytest.mark.parametrize("roundoff", [-5e-17, 0.0, 5e-17])
+def test_null_eigenvalue_roundoff_does_not_change_invertibility(
+    monkeypatch: pytest.MonkeyPatch, roundoff: float
+) -> None:
+    from datetime import UTC, datetime
+
+    from quantlab.portfolio.covariance import _finalize
+
+    monkeypatch.setattr(np.linalg, "eigvalsh", lambda _: np.array([roundoff, 2.0]))
+    report = _finalize(
+        np.array([[1.0, 1.0], [1.0, 1.0]]),
+        ["NSE:A", "NSE:B"],
+        lookback=20,
+        estimator="sample",
+        as_of=datetime(2024, 1, 2, tzinfo=UTC),
+        n_obs=20,
+        repair="none",
+        extra={},
+        note="singular fixture",
+    )
+    assert report.psd and report.rank == 1
+    assert report.condition_number is None
+    assert "not directly invertible" in report.note
+
+
 @pytest.mark.factor
 def test_non_psd_fails_unless_repair_named() -> None:
     from datetime import UTC, datetime

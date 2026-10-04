@@ -49,6 +49,16 @@ which failed UI test collection because `libEGL.so.1` was absent on the Linux ru
 The unpublished workflow includes Qt runtime installation, an import smoke check,
 the locked visual build, and agent tests. That is a prepared fix, not a green cloud run.
 
+Publication was authorized on 2026-10-04. Baseline/foundation commit `9a4e1b0`
+was pushed, excluding credentials and runtime experiment data. Its
+[CI run 37173447623](https://github.com/trishul4kumar-ui/nayak-quant-lab/actions/runs/37173447623)
+passed Qt import, visual build, Ruff and mypy, then exposed two legacy covariance
+failures on Linux: a numerically null eigenvalue rounded slightly positive and
+triggered the ill-conditioning guard. The canonical fix uses a shared scale-aware
+rank/invertibility threshold, preserves rejection of genuinely ill-scaled asset
+variances, and tests both signs of null-eigenvalue roundoff. A fresh cloud gate is
+required before Phase 40 begins.
+
 Phases 40–53 have not been implemented. Resume with Phase 40 only after this gate
 passes; phase 53 additionally requires the separately documented durability work,
 sustained real production-shadow evidence, and explicit human execution controls.
