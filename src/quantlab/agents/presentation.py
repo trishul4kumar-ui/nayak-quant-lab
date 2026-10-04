@@ -7,6 +7,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 from quantlab.agents.contracts import AgentRole, AgentRunRecord, AgentState
+from quantlab.agents.debate_contracts import DebateStatus, EvidenceRelation
 
 
 class SystemSafetyDTO(BaseModel):
@@ -31,6 +32,23 @@ class EvidenceNodeSummaryDTO(BaseModel):
     artifact_hash: str = Field(pattern=r"^[a-f0-9]{64}$")
     label: str
     status: str
+
+
+class EvidenceEdgeDTO(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+    agent: AgentRole
+    evidence_hash: str = Field(pattern=r"^[a-f0-9]{64}$")
+    relation: EvidenceRelation
+
+
+class DebateVisualDTO(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+    transcript_hash: str = Field(pattern=r"^[a-f0-9]{64}$")
+    status: DebateStatus
+    critiques: int = Field(ge=0, le=2)
+    rebuttals: int = Field(ge=0, le=2)
+    edges: tuple[EvidenceEdgeDTO, ...] = Field(max_length=80)
+    adjudication: Literal["NOT_BUILT"] = "NOT_BUILT"
 
 
 class AgentDeskPresentationService:

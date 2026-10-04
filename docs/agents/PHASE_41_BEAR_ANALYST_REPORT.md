@@ -1,7 +1,7 @@
 # Phase 41 — Independent Bear analyst
 
 Implemented only after Phase 40's published CI acceptance. Phase 41 release gates
-are in progress; this report does not imply completion of Phases 42–53 or live
+passed for `794b880`; this report does not imply completion of Phases 42–53 or live
 trading readiness.
 
 Bear owns a downside mandate, strict draft/memo contract, independent model calls,
@@ -39,6 +39,11 @@ nested terminal splitter. Model text is displayed as plain text.
   **223 passed** (the expected Python `-O` assertion warning). Ruff and strict mypy
   passed across 831 source files.
 - No real model/broker request, safety-flag change or live order was used in tests.
-- Final full-suite, optimized-mode, distribution and published CI results will be
-  recorded after completion. Code and fixture tests do not establish profitable
+- Exact local release checkout: **1,499 passed in 423.65 seconds**. Source/wheel
+  distributions built, including both analyst workers and the native workspace.
+  A native 1280×800 Bear run was rendered and visually inspected using an explicitly
+  synthetic test fixture; AVOID and missing evidence remained clearly labelled.
+- Published commit `794b880` passed every cloud release gate in
+  [CI run 37196120100](https://github.com/trishul4kumar-ui/nayak-quant-lab/actions/runs/37196120100).
+  Code and fixture tests do not establish profitable
   research, calibrated performance or real-market production readiness.

@@ -4,7 +4,13 @@ import pytest
 from PySide6.QtWidgets import QApplication
 
 from quantlab.agents.contracts import AgentRole, AgentState
-from quantlab.agents.presentation import AgentVisualStateDTO, EvidenceNodeSummaryDTO
+from quantlab.agents.debate_contracts import DebateStatus, EvidenceRelation
+from quantlab.agents.presentation import (
+    AgentVisualStateDTO,
+    DebateVisualDTO,
+    EvidenceEdgeDTO,
+    EvidenceNodeSummaryDTO,
+)
 from quantlab.ui.widgets.agent_desk_webview import AgentDeskWebView
 
 
@@ -38,4 +44,33 @@ def test_native_fallback_and_bridge_only_navigates(qapp: QApplication) -> None:
     assert observed == [("open_evidence", "f" * 64)]
     assert not hasattr(view.bridge, "submit")
     assert not hasattr(view.bridge, "execute")
+    view.close()
+
+
+def test_debate_bridge_only_opens_published_transcript(qapp: QApplication) -> None:
+    view = AgentDeskWebView()
+    observed = []
+    view.bridge.navigationRequested.connect(lambda *args: observed.append(args))
+    view.bridge.navigate("open_debate", "a" * 64)
+    assert not observed
+    view.bridge.publish(
+        (),
+        (EvidenceNodeSummaryDTO(artifact_hash="b" * 64, label="canonical", status="NOT_TESTED"),),
+        DebateVisualDTO(
+            transcript_hash="a" * 64,
+            status=DebateStatus.INCOMPLETE,
+            critiques=0,
+            rebuttals=0,
+            edges=(
+                EvidenceEdgeDTO(
+                    agent=AgentRole.BULL, evidence_hash="b" * 64, relation=EvidenceRelation.SUPPORT
+                ),
+            ),
+        ),
+    )
+    view.bridge.navigate("open_debate", "c" * 64)
+    view.bridge.navigate("place_live_order", "a" * 64)
+    assert not observed
+    view.bridge.navigate("open_debate", "a" * 64)
+    assert observed == [("open_debate", "a" * 64)]
     view.close()

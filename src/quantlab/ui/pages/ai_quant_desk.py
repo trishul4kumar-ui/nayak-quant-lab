@@ -6,8 +6,20 @@ import json
 from datetime import UTC, datetime
 from pathlib import Path
 
-from PySide6.QtCore import QTimer
-from PySide6.QtWidgets import QCheckBox, QFileDialog, QLabel, QPushButton, QTabWidget, QTextBrowser
+from PySide6.QtCore import Qt, QTimer
+from PySide6.QtWidgets import (
+    QCheckBox,
+    QComboBox,
+    QFileDialog,
+    QHBoxLayout,
+    QLabel,
+    QPushButton,
+    QSplitter,
+    QTabWidget,
+    QTextBrowser,
+    QVBoxLayout,
+    QWidget,
+)
 
 from quantlab.agents.bear import BearWorker, bear_mandate, create_bear_context, search_bear_history
 from quantlab.agents.bull import BullWorker, bull_mandate, create_bull_context, search_bull_history
@@ -18,10 +30,14 @@ from quantlab.agents.contracts import (
     AgentState,
     ResearchMode,
 )
+from quantlab.agents.debate import DebateWorker, create_debate, verify_transcript
+from quantlab.agents.debate_contracts import DebateTranscript, FrozenCritique, FrozenRebuttal
 from quantlab.agents.inputs import read_history, read_snapshot
 from quantlab.agents.presentation import (
     AgentDeskPresentationService,
     AgentVisualStateDTO,
+    DebateVisualDTO,
+    EvidenceEdgeDTO,
     EvidenceNodeSummaryDTO,
 )
 from quantlab.agents.provider import configured_provider
@@ -53,6 +69,9 @@ class AiQuantDeskPage(LabPageShell):
         self._history_path: Path | None = None
         self._job_id: str | None = None
         self._job_role = AgentRole.BULL
+        self._debate_job = False
+        self._active_debate_id: str | None = None
+        self._selected_debate: str | None = None
         self._status = QLabel()
         self._status.setObjectName("deskProviderStatus")
         self._status.setWordWrap(True)
@@ -72,6 +91,37 @@ class AiQuantDeskPage(LabPageShell):
         self._tabs.addTab(self._bear, "Bear")
         self._inspectors["Bear"] = self._bear.memo
         self._workspaces = {AgentRole.BULL: self._bull, AgentRole.BEAR: self._bear}
+        self._debate = QWidget()
+        debate_layout = QVBoxLayout(self._debate)
+        self._debate_status = QLabel("Freeze both independent initials before starting a debate.")
+        self._debate_status.setWordWrap(True)
+        debate_layout.addWidget(self._debate_status)
+        controls = QHBoxLayout()
+        self._debate_button = QPushButton("Debate latest frozen memos")
+        self._debate_button.clicked.connect(self._run_debate)
+        self._rebuttals = QCheckBox("One optional rebuttal each")
+        self._rebuttals.setToolTip("Adds two bounded model calls; never recursive")
+        self._debate_choice = QComboBox()
+        self._debate_choice.setAccessibleName("Saved immutable debate transcripts")
+        self._debate_choice.currentIndexChanged.connect(self._choose_debate)
+        controls.addWidget(self._debate_button)
+        controls.addWidget(self._rebuttals)
+        controls.addWidget(self._debate_choice, 1)
+        debate_layout.addLayout(controls)
+        debate_splitter = QSplitter(Qt.Orientation.Vertical)
+        self._transcript = QTextBrowser()
+        self._transcript.setOpenExternalLinks(False)
+        self._transcript.setAccessibleName("Native immutable debate transcript")
+        self._transcript.setPlainText("No debate transcripts yet. No opposing view is fabricated.")
+        self._falsification = QTextBrowser()
+        self._falsification.setAccessibleName("Canonical falsification checks and evidence gaps")
+        debate_splitter.addWidget(self._transcript)
+        debate_splitter.addWidget(self._falsification)
+        debate_splitter.setChildrenCollapsible(False)
+        debate_splitter.setSizes([360, 180])
+        debate_layout.addWidget(debate_splitter, 1)
+        self._tabs.addTab(self._debate, "Debate Arena")
+        self._inspectors["Debate"] = self._transcript
         for name in ("Permissions", "Tools", "Audit"):
             inspector = QTextBrowser()
             inspector.setOpenExternalLinks(False)
@@ -110,12 +160,17 @@ class AiQuantDeskPage(LabPageShell):
         self.register_splitter(self._bull.evidence_splitter, "bull-evidence")
         self.register_splitter(self._bear.main_splitter, "bear-workspace")
         self.register_splitter(self._bear.evidence_splitter, "bear-evidence")
+        self.register_splitter(debate_splitter, "debate-workspace")
         self.bind_splitter_preferences(layout_id="ai-quant-desk", settings=runtime.ui_settings)
         self.refresh()
 
     def _visual_navigation(self, intent: str, identity: str) -> None:
         if intent == "select_agent":
             self._tabs.setCurrentIndex(0 if identity == "BULL" else 1)
+        elif intent == "open_debate":
+            self._selected_debate = identity
+            self._tabs.setCurrentWidget(self._debate)
+            self.refresh()
         elif intent == "open_evidence":
             try:
                 repository = AgentRepository(self._repo_path)
@@ -218,9 +273,11 @@ class AiQuantDeskPage(LabPageShell):
             f"{role.value.lower()}_research", work, {"context_hash": context.content_hash}
         )
         self._job_id = job.job_id
+        self._debate_job = False
         self._job_role = role
         self._run_button.setEnabled(False)
         self._bear_button.setEnabled(False)
+        self._debate_button.setEnabled(False)
         self._cancel_button.setEnabled(True)
         workspace.task.setText("Queued · frozen context verified · RESEARCH ONLY")
         self._timer.start()
@@ -228,9 +285,104 @@ class AiQuantDeskPage(LabPageShell):
     def _cancel_bull(self) -> None:
         if self._job_id:
             self.runtime.jobs.cancel(self._job_id)
+            if self._debate_job:
+                self._debate_status.setText("Cancellation requested; no fabricated completion.")
+                return
             self._workspaces[self._job_role].task.setText(
                 "Cancellation requested; late model responses cannot freeze a memo."
             )
+
+    def _run_debate(self) -> None:
+        self._tabs.setCurrentWidget(self._debate)
+        if self._job_id:
+            self._debate_status.setText("BLOCKED · another desk job is running.")
+            return
+        repository: AgentRepository | None = None
+        try:
+            repository = AgentRepository(self._repo_path)
+            bulls, bears = search_bull_history(repository), search_bear_history(repository)
+            if not bulls or not bears:
+                self._debate_status.setText("BLOCKED · freeze both real analyst memos first.")
+                return
+            session = create_debate(
+                repository,
+                bulls[-1].content_hash,
+                bears[-1].content_hash,
+                now=datetime.now(UTC),
+                include_rebuttals=self._rebuttals.isChecked(),
+            )
+        except (OSError, RuntimeError, ValueError, KeyError):
+            self._debate_status.setText(
+                "BLOCKED · initials must share healthy, unexpired frozen snapshot and PIT history. "
+                "Load the same saved inputs for both; no peer view is substituted."
+            )
+            return
+        finally:
+            if repository is not None:
+                repository.close()
+
+        def work(job: Job) -> dict[str, object]:
+            repo = AgentRepository(self._repo_path)
+            try:
+                transcript = DebateWorker(repo, {role: self._provider for role in AgentRole}).run(
+                    session, cancel=job.cancel_event
+                )
+                return {
+                    "transcript_hash": transcript.content_hash,
+                    "status": transcript.status.value,
+                }
+            finally:
+                repo.close()
+
+        job = self.runtime.jobs.submit("agent_debate", work, {"session_hash": session.content_hash})
+        self._job_id, self._debate_job = job.job_id, True
+        self._active_debate_id, self._selected_debate = session.debate_id, None
+        for button in (self._run_button, self._bear_button, self._debate_button):
+            button.setEnabled(False)
+        self._cancel_button.setEnabled(True)
+        self._debate_status.setText("Queued · both initials frozen · bounded critique only")
+        self._timer.start()
+
+    def _choose_debate(self, _: int) -> None:
+        identity = self._debate_choice.currentData()
+        if isinstance(identity, str):
+            self._selected_debate = identity
+            self.refresh()
+
+    def _show_transcript(self, repository: AgentRepository, transcript: DebateTranscript) -> None:
+        verify_transcript(repository, transcript)
+        bull = repository.get(transcript.bull_memo_hash, BullResearchMemo)
+        self._debate_status.setText(
+            f"{bull.data_kind} · {transcript.status} · {len(transcript.critiques)} critiques / "
+            f"{len(transcript.rebuttals)} rebuttals · NO EXECUTION AUTHORITY · "
+            f"{transcript.error_code or 'Adjudication not built yet'}"
+        )
+        text = [
+            f"Snapshot: {transcript.snapshot_hash}\nTranscript: {transcript.content_hash}\n"
+            f"Started: {transcript.started_at.isoformat()}\n"
+            f"Completed: {transcript.completed_at.isoformat()}\n"
+            "Arguments and raw confidence are not quantitative evidence.\n"
+        ]
+        for key in transcript.critiques:
+            critique = repository.get(key, FrozenCritique)
+            text.append(
+                f"\n{critique.draft.critic_agent} CRITIQUE · {key}\n"
+                + json.dumps(critique.draft.model_dump(mode="json"), indent=2)
+            )
+        for key in transcript.rebuttals:
+            rebuttal = repository.get(key, FrozenRebuttal)
+            text.append(
+                f"\n{rebuttal.draft.respondent_agent} FINAL REBUTTAL · {key}\n"
+                + json.dumps(rebuttal.draft.model_dump(mode="json"), indent=2)
+            )
+        self._transcript.setPlainText("\n".join(text))
+        self._falsification.setPlainText(
+            "CANONICAL FALSIFICATION · exact named checks only\n\n"
+            + "\n\n".join(
+                f"{check.name}: {check.status}\n{check.note}"
+                for check in transcript.falsification_checks
+            )
+        )
 
     def _open_memo(self, memo_hash: str, role: AgentRole = AgentRole.BULL) -> None:
         repository: AgentRepository | None = None
@@ -258,11 +410,17 @@ class AiQuantDeskPage(LabPageShell):
                 self._timer.stop()
                 self._run_button.setEnabled(True)
                 self._bear_button.setEnabled(True)
+                self._debate_button.setEnabled(True)
                 self._cancel_button.setEnabled(False)
                 if job and job.status is not JobStatus.COMPLETED:
-                    self._workspaces[self._job_role].task.setText(
-                        f"Research job {job.status}; inspect the persisted timeline."
-                    )
+                    if self._debate_job:
+                        self._debate_status.setText(
+                            f"Debate job {job.status}; no completion fabricated."
+                        )
+                    else:
+                        self._workspaces[self._job_role].task.setText(
+                            f"Research job {job.status}; inspect the persisted timeline."
+                        )
         health = self._provider.health()
         self._status.setText(
             f"Provider: {health.provider} / {health.model} · {health.observed_status} · "
@@ -369,11 +527,85 @@ class AiQuantDeskPage(LabPageShell):
                         indent=2,
                     )
                 )
-                self._visual.bridge.publish(tuple(states), tuple(evidence))
+                transcripts = repository.list(DebateTranscript)[-100:]
+                self._debate_choice.blockSignals(True)
+                self._debate_choice.clear()
+                for row in transcripts:
+                    self._debate_choice.addItem(
+                        f"{row.status} · {row.debate_id[-8:]}", row.content_hash
+                    )
+                selected = next(
+                    (row for row in transcripts if row.content_hash == self._selected_debate),
+                    transcripts[-1] if transcripts else None,
+                )
+                debate_dto = None
+                if selected:
+                    self._debate_choice.setCurrentIndex(
+                        self._debate_choice.findData(selected.content_hash)
+                    )
+                    self._show_transcript(repository, selected)
+                    evidence = [
+                        EvidenceNodeSummaryDTO(
+                            artifact_hash=key, label=result.tool.value, status=result.status
+                        )
+                        for key in selected.evidence_hashes
+                        for result in (repository.get(key, AgentToolResult),)
+                    ]
+                    debate_dto = DebateVisualDTO(
+                        transcript_hash=selected.content_hash,
+                        status=selected.status,
+                        critiques=len(selected.critiques),
+                        rebuttals=len(selected.rebuttals),
+                        edges=tuple(
+                            EvidenceEdgeDTO(
+                                agent=edge.agent,
+                                evidence_hash=edge.evidence_hash,
+                                relation=edge.relation,
+                            )
+                            for edge in selected.evidence_graph[:80]
+                        ),
+                    )
+                self._debate_choice.blockSignals(False)
+                if self._job_id and self._debate_job:
+                    events = repository.audit_events(self._active_debate_id)
+                    active_event = next(
+                        (
+                            event
+                            for event in reversed(events)
+                            if event.event in {"DEBATE_CRITIQUING", "DEBATE_REBUTTING"}
+                        ),
+                        None,
+                    )
+                    if active_event and active_event.safe_code in {
+                        role.value for role in AgentRole
+                    }:
+                        role = AgentRole(active_event.safe_code)
+                        self._debate_status.setText(
+                            f"{active_event.event} · {role} · bounded protocol active"
+                        )
+                        states = [
+                            AgentVisualStateDTO(
+                                agent=state.agent,
+                                state=AgentState.CRITIQUING
+                                if active_event.event == "DEBATE_CRITIQUING"
+                                else AgentState.REBUTTING,
+                                task_label=active_event.event,
+                                completed_tools=state.completed_tools,
+                            )
+                            if state.agent is role
+                            else state
+                            for state in states
+                        ]
+                self._visual.bridge.publish(tuple(states), tuple(evidence[:40]), debate_dto)
             finally:
                 repository.close()
         except (OSError, RuntimeError, ValueError, KeyError):
             self._status.setText("DESK BLOCKED · research persistence could not be verified")
+            self._debate_status.setText("BLOCKED · saved transcript could not be verified")
+            self._debate_choice.blockSignals(True)
+            self._debate_choice.clear()
+            self._debate_choice.blockSignals(False)
+            self._falsification.clear()
             for inspector in self._inspectors.values():
                 inspector.setPlainText("Persistence unavailable. Research runs are blocked.")
             self._visual.bridge.publish(

@@ -11,6 +11,7 @@ from PySide6.QtWidgets import QLabel, QVBoxLayout, QWidget
 
 from quantlab.agents.presentation import (
     AgentVisualStateDTO,
+    DebateVisualDTO,
     EvidenceNodeSummaryDTO,
     SystemSafetyDTO,
 )
@@ -23,6 +24,7 @@ class AgentDeskBridge(QObject):
     def __init__(self, parent: QObject | None = None) -> None:
         super().__init__(parent)
         self._evidence: frozenset[str] = frozenset()
+        self._transcript: str | None = None
         self._payload = json.dumps(
             {"agents": [], "evidence": [], "safety": SystemSafetyDTO().model_dump(mode="json")}
         )
@@ -35,12 +37,15 @@ class AgentDeskBridge(QObject):
         self,
         states: tuple[AgentVisualStateDTO, ...],
         evidence: tuple[EvidenceNodeSummaryDTO, ...],
+        debate: DebateVisualDTO | None = None,
     ) -> None:
         self._evidence = frozenset(row.artifact_hash for row in evidence)
+        self._transcript = debate.transcript_hash if debate else None
         self._payload = json.dumps(
             {
                 "agents": [row.model_dump(mode="json") for row in states],
                 "evidence": [row.model_dump(mode="json") for row in evidence],
+                "debate": debate.model_dump(mode="json") if debate else None,
                 "safety": SystemSafetyDTO().model_dump(mode="json"),
             }
         )
@@ -48,8 +53,10 @@ class AgentDeskBridge(QObject):
 
     @Slot(str, str)
     def navigate(self, intent: str, identity: str) -> None:
-        allowed = (intent == "select_agent" and identity in {"BULL", "BEAR"}) or (
-            intent == "open_evidence" and identity in self._evidence
+        allowed = (
+            (intent == "select_agent" and identity in {"BULL", "BEAR"})
+            or (intent == "open_evidence" and identity in self._evidence)
+            or (intent == "open_debate" and identity == self._transcript and bool(identity))
         )
         if allowed:
             self.navigationRequested.emit(intent, identity)

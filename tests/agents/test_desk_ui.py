@@ -9,6 +9,7 @@ from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QApplication, QPushButton
 from tests.agents.test_bear import BearFixtureProvider
 from tests.agents.test_bull import ResearchFixtureProvider, snapshot
+from tests.agents.test_debate import DeskFixtureProvider
 
 from quantlab.agents.provider import UnavailableProvider
 from quantlab.app.bootstrap import bootstrap
@@ -161,6 +162,76 @@ def test_native_bear_run_history_evidence_and_panel_preferences(
             page._bear.evidence_splitter.sizes()
         )
         assert page._run_button.isEnabled() and page._bear_button.isEnabled()
+    finally:
+        page.close()
+        runtime.shutdown()
+
+
+def test_native_independent_memos_to_bounded_debate_and_evidence_navigation(
+    tmp_path: Path,
+    qapp: QApplication,
+) -> None:
+    import json
+
+    runtime = bootstrap(data_dir=tmp_path / "runtime")
+    page = AiQuantDeskPage(runtime)
+    saved = tmp_path / "snapshot.json"
+    saved.write_text(snapshot().model_dump_json())
+    try:
+        page.resize(1280, 800)
+        page.show()
+        qapp.processEvents()
+        page._tabs.setCurrentWidget(page._debate)
+        QTest.mouseClick(page._debate_button, Qt.MouseButton.LeftButton)
+        assert "BLOCKED" in page._debate_status.text()
+        assert page._job_id is None
+        provider = DeskFixtureProvider()
+        page._provider = provider
+        page._snapshot_path = saved
+        page._replay.setChecked(True)
+        for button in (page._run_button, page._bear_button):
+            QTest.mouseClick(button, Qt.MouseButton.LeftButton)
+            assert page._job_id is not None
+            deadline = time.monotonic() + 10
+            while page._job_id and time.monotonic() < deadline:
+                QTest.qWait(25)
+                page.refresh()
+            assert page._job_id is None
+        assert provider.calls == 4
+        page._rebuttals.setChecked(True)
+        page._tabs.setCurrentWidget(page._debate)
+        QTest.mouseClick(page._debate_button, Qt.MouseButton.LeftButton)
+        assert page._job_id is not None, page._debate_status.text()
+        deadline = time.monotonic() + 10
+        while page._job_id and time.monotonic() < deadline:
+            QTest.qWait(25)
+            page.refresh()
+        assert page._job_id is None
+        assert "SYNTHETIC" in page._debate_status.text()
+        assert "COMPLETE" in page._debate_status.text()
+        assert "2 critiques / 2 rebuttals" in page._debate_status.text()
+        assert "not quantitative evidence" in page._transcript.toPlainText()
+        assert "NOT_TESTED" in page._falsification.toPlainText()
+        assert provider.calls == 8 and page._debate_choice.count() == 1
+        presentation = json.loads(page._visual.bridge.presentation)
+        debate = presentation["debate"]
+        assert debate["adjudication"] == "NOT_BUILT" and debate["edges"]
+        page._visual.bridge.navigate("open_debate", debate["transcript_hash"])
+        assert page._tabs.currentWidget() is page._debate
+        evidence = presentation["evidence"][0]["artifact_hash"]
+        page._visual.bridge.navigate("open_evidence", evidence)
+        assert page._tabs.currentWidget() in {page._bull, page._bear}
+        assert any(
+            evidence in workspace.timeline.toPlainText() for workspace in page._workspaces.values()
+        )
+        page._debate_choice.setCurrentIndex(0)
+        page._tabs.setCurrentWidget(page._debate)
+        QTest.mouseClick(page._debate_button, Qt.MouseButton.LeftButton)
+        deadline = time.monotonic() + 10
+        while page._job_id and time.monotonic() < deadline:
+            QTest.qWait(25)
+            page.refresh()
+        assert page._job_id is None and provider.calls == 8  # saved transcript, no paid replay
     finally:
         page.close()
         runtime.shutdown()

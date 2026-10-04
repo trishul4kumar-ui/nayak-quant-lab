@@ -7,7 +7,9 @@ from pathlib import Path
 
 from quantlab.agents.bear import BearWorker, bear_mandate, create_bear_context, search_bear_history
 from quantlab.agents.bull import BullWorker, bull_mandate, create_bull_context, search_bull_history
-from quantlab.agents.contracts import AgentRunRecord, AgentState, ResearchMode
+from quantlab.agents.contracts import AgentRole, AgentRunRecord, AgentState, ResearchMode
+from quantlab.agents.debate import DebateWorker, create_debate, verify_transcript
+from quantlab.agents.debate_contracts import DebateStatus, DebateTranscript
 from quantlab.agents.inputs import read_history, read_snapshot
 from quantlab.agents.provider import configured_provider
 from quantlab.agents.repository import AgentRepository
@@ -30,6 +32,8 @@ def add_agents_parser(sub: argparse._SubParsersAction[argparse.ArgumentParser]) 
             "bull-history",
             "run-bear",
             "bear-history",
+            "run-debate",
+            "debate-history",
         ),
     )
     parser.add_argument("--run-id")
@@ -37,6 +41,9 @@ def add_agents_parser(sub: argparse._SubParsersAction[argparse.ArgumentParser]) 
     parser.add_argument("--history", type=Path)
     parser.add_argument("--replay", action="store_true")
     parser.add_argument("--query", default="")
+    parser.add_argument("--bull-memo")
+    parser.add_argument("--bear-memo")
+    parser.add_argument("--rebuttals", action="store_true")
 
 
 def run_agents_command(args: argparse.Namespace) -> int:
@@ -56,7 +63,31 @@ def _run_agents_command(args: argparse.Namespace) -> int:
     try:
         provider = configured_provider()
         mandate = bull_mandate(datetime(2026, 10, 4, tzinfo=UTC))
-        if args.agents_action in {"run-bull", "run-bear"}:
+        if args.agents_action == "run-debate":
+            if not args.bull_memo or not args.bear_memo:
+                raise ValueError("EXPLICIT_INITIAL_MEMOS_REQUIRED")
+            session = create_debate(
+                repository,
+                args.bull_memo,
+                args.bear_memo,
+                now=datetime.now(UTC),
+                include_rebuttals=args.rebuttals,
+            )
+            transcript = DebateWorker(repository, {role: provider for role in AgentRole}).run(
+                session
+            )
+            payload: object = transcript.model_dump(mode="json")
+            exit_code = 0 if transcript.status is DebateStatus.COMPLETE else 2
+        elif args.agents_action == "debate-history":
+            transcripts = repository.list(DebateTranscript)[-100:]
+            for transcript in transcripts:
+                verify_transcript(repository, transcript)
+            payload = [
+                row.model_dump(mode="json")
+                for row in transcripts
+                if not args.query or args.query.casefold() in row.model_dump_json().casefold()
+            ]
+        elif args.agents_action in {"run-bull", "run-bear"}:
             if args.snapshot is None:
                 raise ValueError("EXPLICIT_SNAPSHOT_REQUIRED")
             snapshot = read_snapshot(args.snapshot)
@@ -75,7 +106,7 @@ def _run_agents_command(args: argparse.Namespace) -> int:
             )
             worker = BullWorker if args.agents_action == "run-bull" else BearWorker
             run = worker(repository, provider).run(context)
-            payload: object = run.model_dump(mode="json")
+            payload = run.model_dump(mode="json")
             if run.state in {AgentState.BLOCKED, AgentState.STALE, AgentState.ERROR}:
                 exit_code = 2
         elif args.agents_action in {"bull-history", "bear-history"}:

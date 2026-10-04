@@ -9,7 +9,9 @@ header { display: flex; justify-content: space-between; gap: 12px; font-size: 10
 .station small { color: #94aabd; line-height: 1.5; }
 .system { align-items: center; justify-content: center; color: #7bbfee; }
 .system strong { font-size: 12px; }
-#scene { height: 180px; } canvas { width: 100%; height: 100%; }
+#scene { height: 240px; } canvas { width: 100%; height: 100%; }
+.legend { color: #94aabd; font-size: 11px; line-height: 1.5; }
+.system:disabled { opacity: .8; }
 #fallback { font-size: 11px; color: #94aabd; }
 #evidence { padding-left: 0; list-style: none; }
 #evidence button { background: transparent; border: 1px solid #294154; padding: 10px; color: inherit; }

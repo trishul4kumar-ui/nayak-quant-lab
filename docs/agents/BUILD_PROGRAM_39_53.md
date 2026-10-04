@@ -22,8 +22,8 @@ never replaced with synthetic evidence or a completion claim.
 |---|---|---|
 | 39 Foundation | Accepted | CI green for `3abef8f` |
 | 40 Bull | Accepted | CI green for `6aa8651`; 1,482 local tests passed |
-| 41 Bear | Implemented; verification in progress | Local and published release gates |
-| 42 Debate | Pending | Independent frozen memos |
+| 41 Bear | Accepted | CI green for `794b880`; 1,499 local tests passed |
+| 42 Debate | In progress | Bounded critique and immutable transcript release gates |
 | 43 Adjudication | Pending | Bounded debate accepted |
 | 44 Levels | Pending | Deterministic evidence decision |
 | 45 Candidates | Pending | Complete immutable upstream lineage |
@@ -111,3 +111,9 @@ mypy across 829 source files. Phase 41 began only after the cloud result was gre
 It adds an independent Bear mandate/memo and mirrored native workspace on the same
 bounded worker infrastructure; missing instrument eligibility stays UNKNOWN.
 Phase 42 cannot begin until Phase 41's release checks also pass.
+
+Phase 41's release checks passed for `794b880` in
+[CI run 37196120100](https://github.com/trishul4kumar-ui/nayak-quant-lab/actions/runs/37196120100).
+The exact local checkout passed **1,499 tests in 423.65 seconds**, plus 223
+optimized-mode safety tests, Ruff, strict mypy and source/wheel builds. Phase 42
+began after this acceptance; Phase 43 still requires the bounded debate release gate.
