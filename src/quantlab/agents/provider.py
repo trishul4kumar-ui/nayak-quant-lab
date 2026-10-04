@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import os
 import queue
 import threading
 import time
@@ -14,6 +13,7 @@ from datetime import UTC, datetime
 from typing import Any, Protocol, TypeVar
 
 from pydantic import BaseModel, ConfigDict, SecretStr, ValidationError
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from quantlab.agents.contracts import AgentModelIdentity
 from quantlab.agents.errors import AgentProviderError
@@ -102,6 +102,7 @@ class OpenAIResponsesProvider:
             version="responses-json-schema-v1",
         )
         self._observed_status = "NOT_TESTED"
+        self._transport_slot = threading.BoundedSemaphore(1)
 
     def identity(self) -> AgentModelIdentity:
         return self._identity
@@ -115,6 +116,14 @@ class OpenAIResponsesProvider:
         )
 
     def generate_structured(self, request: StructuredRequest) -> str:
+        if not self._transport_slot.acquire(blocking=False):
+            raise AgentProviderError("PROVIDER_BUSY")
+        try:
+            return self._generate(request)
+        finally:
+            self._transport_slot.release()
+
+    def _generate(self, request: StructuredRequest) -> str:
         payload = {
             "model": self._model,
             "store": False,
@@ -171,11 +180,18 @@ class OpenAIResponsesProvider:
         return self.generate_structured(request)
 
 
+class AgentProviderSettings(BaseSettings):
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+    openai_api_key: SecretStr | None = None
+    quant_lab_agent_model: str | None = None
+
+
 def configured_provider() -> AgentModelProvider:
-    key, model = os.environ.get("OPENAI_API_KEY"), os.environ.get("QUANT_LAB_AGENT_MODEL")
-    if not key or not model:
+    settings = AgentProviderSettings()
+    key, model = settings.openai_api_key, settings.quant_lab_agent_model
+    if key is None or not key.get_secret_value() or not model:
         return UnavailableProvider()
-    return OpenAIResponsesProvider(model, SecretStr(key))
+    return OpenAIResponsesProvider(model, key)
 
 
 class ProviderRunner:

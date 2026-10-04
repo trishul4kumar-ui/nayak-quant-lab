@@ -6,6 +6,7 @@ from collections.abc import Callable
 from datetime import datetime
 from threading import RLock
 
+from quantlab.agents.canonical_tools import factor_metrics, regime_metrics
 from quantlab.agents.context import FrozenHistory, FrozenSnapshot, validate_context
 from quantlab.agents.contracts import AgentMandate, AgentRunContext, EvidenceMetric, EvidenceStatus
 from quantlab.agents.errors import AgentContextError, AgentPermissionError
@@ -17,6 +18,7 @@ from quantlab.agents.tool_contracts import (
     AgentToolResult,
     ToolName,
 )
+from quantlab.core.errors import QuantLabError
 from quantlab.data.fabric.types import FeatureStatus
 from quantlab.features.definition import (
     FeatureDefinition,
@@ -38,6 +40,12 @@ class AgentToolGateway:
             ToolName.FREEZE_SNAPSHOT: self._market,
             ToolName.INSPECT_MARKET: self._market,
             ToolName.QUERY_FEATURE: self._feature,
+            ToolName.QUERY_FACTOR: lambda context, request: factor_metrics(
+                repository, context, request
+            ),
+            ToolName.QUERY_REGIME: lambda context, request: regime_metrics(
+                repository, context, request
+            ),
         }
 
     def catalog(self) -> tuple[tuple[str, str, bool], ...]:
@@ -123,7 +131,7 @@ class AgentToolGateway:
         else:
             try:
                 metrics = adapter(context, request)
-            except (ValueError, KeyError, RuntimeError):
+            except (ValueError, KeyError, RuntimeError, QuantLabError):
                 status, error = "FAILED", "CANONICAL_ENGINE_FAILED"
         if any(row.available_time > context.as_of for row in metrics):
             raise AgentContextError("FUTURE_TOOL_EVIDENCE")

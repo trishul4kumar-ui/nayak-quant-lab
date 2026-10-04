@@ -6,7 +6,8 @@
 | inspect_market | Frozen observations, whitelisted price evidence fields | Unknown values remain unknown |
 | query_feature | `quantlab.features.engine.compute_value` | NOT_TESTED without frozen PIT history |
 | query_knowledge | Catalogued, not bound in phase 39 | UNAVAILABLE |
-| query_factor / query_regime | Catalogued, not bound in phase 39 | UNAVAILABLE |
+| query_factor | Existing `factors.market.rolling_betas`; equal-weight universe, not NIFTY | NOT_TESTED without PIT history; unsupported factor names fail |
+| query_regime | Existing `regimes.snapshot.compute_snapshot`; descriptive state, not forecast | Missing metrics stay NOT_TESTED; unsupported regimes fail |
 | run_backtest / run_validation | Catalogued, not bound in phase 39 | UNAVAILABLE |
 | econometrics / model / ensemble / portfolio / risk / TCA | Catalogued, not bound in phase 39 | UNAVAILABLE |
 

@@ -12,7 +12,7 @@ from uuid import uuid4
 
 from pydantic import Field
 
-from quantlab.agents.hashing import Artifact
+from quantlab.agents.hashing import Artifact, digest
 from quantlab.app.paths import RuntimePaths
 from quantlab.control_plane.sqlite import ControlPlaneSqlite, ControlPlaneStoreError
 
@@ -106,3 +106,15 @@ class AgentRepository:
 
     def close(self) -> None:
         self.store.close()
+
+    def claim_run(self, run_id: str, context_hash: str) -> bool:
+        """Atomic, permanent claim: crashes cannot silently replay paid model calls."""
+        payload = {"context_hash": context_hash}
+        with self._persistence():
+            return self.store.append(
+                namespace="agent_run_claims",
+                identity=run_id,
+                payload=payload,
+                payload_hash=digest(payload),
+                event="RUN_CLAIMED",
+            )

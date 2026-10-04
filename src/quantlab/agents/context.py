@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta
+from math import isfinite
 from typing import Self
 from uuid import uuid4
 
@@ -62,6 +63,7 @@ def create_context(
     mode: ResearchMode = ResearchMode.RESEARCH,
     ttl_seconds: int = 300,
     history: FrozenHistory | None = None,
+    agent_version: AgentVersion | None = None,
 ) -> AgentRunContext:
     if now.tzinfo is None or snapshot.as_of.tzinfo is None:
         raise AgentContextError("TIMEZONE_REQUIRED")
@@ -74,6 +76,11 @@ def create_context(
     if snapshot.quality is not QualityStatus.VALID or not snapshot.observations:
         raise AgentContextError("UNHEALTHY_SNAPSHOT")
     for row in snapshot.observations:
+        if row.quality is not QualityStatus.VALID or any(
+            value is not None and not isfinite(value)
+            for value in (row.price, row.bid, row.ask, row.quantity, row.volume)
+        ):
+            raise AgentContextError("UNHEALTHY_OBSERVATION")
         if max(row.event_time, row.receive_time, row.processing_time) > snapshot.as_of:
             raise AgentContextError("FUTURE_AVAILABLE_OBSERVATION")
     names = tuple(sorted({row.security_id for row in snapshot.observations}))
@@ -100,7 +107,13 @@ def create_context(
         if history.snapshot_hash != snapshot.snapshot_hash or history.data_kind is not kind:
             raise AgentContextError("HISTORY_BOUNDARY_MISMATCH")
         if any(
-            max(row.pit.available_time, row.pit.event_time, row.pit.ingestion_time) > snapshot.as_of
+            max(
+                row.pit.available_time,
+                row.pit.event_time,
+                row.pit.effective_time,
+                row.pit.ingestion_time,
+            )
+            > snapshot.as_of
             or str(row.instrument) not in names
             or row.price_kind != history.price_basis
             or row.data_kind.upper() != kind.value
@@ -143,7 +156,8 @@ def create_context(
                 created_at=now,
                 agent_id=mandate.role.value,
                 role=mandate.role,
-                version=AgentVersion(created_at=now, version="1", prompt_hash=prompt_hash),
+                version=agent_version
+                or AgentVersion(created_at=now, version="1", prompt_hash=prompt_hash),
             ),
             model=model,
             tool_policy_hash=mandate.content_hash,

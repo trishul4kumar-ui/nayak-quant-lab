@@ -3,8 +3,11 @@ from __future__ import annotations
 import argparse
 import json
 from datetime import UTC, datetime
+from pathlib import Path
 
-from quantlab.agents.contracts import AgentRole, AgentRunRecord
+from quantlab.agents.bull import BullWorker, create_bull_context, search_bull_history
+from quantlab.agents.contracts import AgentRole, AgentRunRecord, AgentState, ResearchMode
+from quantlab.agents.inputs import read_history, read_snapshot
 from quantlab.agents.permissions import mandate_for
 from quantlab.agents.provider import configured_provider
 from quantlab.agents.repository import AgentRepository
@@ -23,26 +26,59 @@ def add_agents_parser(sub: argparse._SubParsersAction[argparse.ArgumentParser]) 
             "tools",
             "audit",
             "provider-health",
+            "run-bull",
+            "bull-history",
         ),
     )
     parser.add_argument("--run-id")
+    parser.add_argument("--snapshot", type=Path)
+    parser.add_argument("--history", type=Path)
+    parser.add_argument("--replay", action="store_true")
+    parser.add_argument("--query", default="")
 
 
 def run_agents_command(args: argparse.Namespace) -> int:
     try:
         return _run_agents_command(args)
-    except (ControlPlaneStoreError, ValueError, KeyError):
+    except ControlPlaneStoreError:
         print(json.dumps({"error": "AGENT_PERSISTENCE_UNAVAILABLE", "live_trading": False}))
+        return 2
+    except (OSError, RuntimeError, ValueError, KeyError):
+        print(json.dumps({"error": "AGENT_INPUT_OR_RUN_BLOCKED", "live_trading": False}))
         return 2
 
 
 def _run_agents_command(args: argparse.Namespace) -> int:
     repository = AgentRepository()
+    exit_code = 0
     try:
         provider = configured_provider()
         mandate = mandate_for(AgentRole.BULL, created_at=datetime(2026, 10, 4, tzinfo=UTC))
-        if args.agents_action == "provider-health":
-            payload: object = provider.health().model_dump(mode="json")
+        if args.agents_action == "run-bull":
+            if args.snapshot is None:
+                raise ValueError("EXPLICIT_SNAPSHOT_REQUIRED")
+            snapshot = read_snapshot(args.snapshot)
+            now = datetime.now(UTC)
+            history = read_history(args.history, snapshot, now) if args.history else None
+            context = create_bull_context(
+                repository,
+                snapshot,
+                provider,
+                now=now,
+                history=history,
+                mode=ResearchMode.REPLAY if args.replay else ResearchMode.RESEARCH,
+            )
+            run = BullWorker(repository, provider).run(context)
+            payload: object = run.model_dump(mode="json")
+            if run.state in {AgentState.BLOCKED, AgentState.STALE, AgentState.ERROR}:
+                exit_code = 2
+        elif args.agents_action == "bull-history":
+            payload = [
+                memo.model_dump(mode="json")
+                for memo in search_bull_history(repository, args.query)[-100:]
+            ]
+        elif args.agents_action == "provider-health":
+            payload = provider.health().model_dump(mode="json")
         elif args.agents_action == "permissions":
             payload = {
                 "allowed": sorted(mandate.granted),
@@ -63,6 +99,6 @@ def _run_agents_command(args: argparse.Namespace) -> int:
                 "ai_live_order_authority": False,
             }
         print(json.dumps(payload, indent=2))
-        return 0
+        return exit_code
     finally:
         repository.close()

@@ -1,15 +1,17 @@
 from __future__ import annotations
 
 import json
+import threading
 from contextlib import contextmanager
 from typing import Any
 from unittest.mock import patch
 
 import pytest
-from pydantic import SecretStr
+from pydantic import BaseModel, SecretStr
 
 from quantlab.agents.errors import AgentProviderError
-from quantlab.agents.provider import OpenAIResponsesProvider, StructuredRequest
+from quantlab.agents.provider import OpenAIResponsesProvider, ProviderRunner, StructuredRequest
+from quantlab.agents.repository import AgentRepository
 
 
 def request() -> StructuredRequest:
@@ -85,3 +87,39 @@ def test_incomplete_refusal_and_empty_are_not_memos(body: object, code: str) -> 
     with transport(body), pytest.raises(AgentProviderError, match=code) as failure:
         provider.generate_structured(request())
     assert "raw sensitive" not in str(failure.value)
+
+
+def test_timeout_cannot_overlap_transport_via_a_new_runner(
+    repository: AgentRepository,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    provider = OpenAIResponsesProvider("configured-model", SecretStr("fixture-credential"))
+    release = threading.Event()
+    finished = threading.Event()
+    calls = []
+
+    class Output(BaseModel):
+        answer: str
+
+    def delayed(req: StructuredRequest) -> str:
+        calls.append(req.run_id)
+        release.wait(2)
+        finished.set()
+        return '{"answer":"fixture"}'
+
+    monkeypatch.setattr(provider, "_generate", delayed)
+    short = StructuredRequest(
+        run_id="bounded",
+        sections=request().sections,
+        schema_json=request().schema_json,
+        timeout_seconds=0.03,
+    )
+    try:
+        with pytest.raises(AgentProviderError, match="TIMEOUT"):
+            ProviderRunner(provider, repository).generate(short, Output)
+        with pytest.raises(AgentProviderError, match="PROVIDER_FAILED"):
+            ProviderRunner(provider, repository).generate(request(), Output)
+        assert len(calls) == 1
+    finally:
+        release.set()
+        assert finished.wait(2)

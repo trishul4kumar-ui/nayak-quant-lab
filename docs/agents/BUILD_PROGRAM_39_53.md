@@ -20,8 +20,8 @@ never replaced with synthetic evidence or a completion claim.
 
 | Phase | Status | Next evidence required |
 |---|---|---|
-| 39 Foundation | Implemented locally; release acceptance blocked | Published GitHub CI green for this checkout |
-| 40 Bull | Pending | Phase 39 accepted |
+| 39 Foundation | Accepted | CI green for `3abef8f` |
+| 40 Bull | Implemented; verification in progress | Local and published release gates |
 | 41 Bear | Pending | Shared contracts and Bull accepted |
 | 42 Debate | Pending | Independent frozen memos |
 | 43 Adjudication | Pending | Bounded debate accepted |
@@ -40,10 +40,10 @@ Local checks are evidence for this checkout only. GitHub CI is not reported as g
 for unpublished changes. No commit, push, live broker submission, or remote deployment
 is implied by this program.
 
-## Current stop condition
+## Publication and foundation acceptance
 
 The supplied acceptance matrix expressly forbids progressing with `CI_RED`.
-The most recent published run for HEAD `7d9be18` is
+The initial published run for HEAD `7d9be18` was
 [GitHub run 37127197785](https://github.com/trishul4kumar-ui/nayak-quant-lab/actions/runs/37127197785),
 which failed UI test collection because `libEGL.so.1` was absent on the Linux runner.
 The unpublished workflow includes Qt runtime installation, an import smoke check,
@@ -70,8 +70,10 @@ shell quoting in the legacy final secret check. The same tracked-file assignment
 pattern now runs through a tested argument-list scanner; matching values are never
 printed. Secret and optimized-mode checks now run before the long covered suite.
 
-Phases 40–53 have not been implemented. Resume with Phase 40 only after this gate
-passes; phase 53 additionally requires the separately documented durability work,
+Foundation acceptance: all cloud gates passed for `3abef8f` in
+[CI run 37175625914](https://github.com/trishul4kumar-ui/nayak-quant-lab/actions/runs/37175625914).
+Phase 40 began only after this result. Phases 41–53 remain pending; phase 53
+additionally requires the separately documented durability work,
 sustained real production-shadow evidence, and explicit human execution controls.
 
 ## Local verification — 2026-10-04
@@ -97,6 +99,6 @@ sustained real production-shadow evidence, and explicit human execution controls
   unknown tools, denied grants, schema refusal, timeout, cancellation, and restart
   behavior covered. No model or live broker request was dispatched during validation.
 
-The desk currently establishes the foundation, not running Bull/Bear analysts or
-an end-to-end trading strategy. Only three canonical tools are bound; others are
-explicitly unavailable. See AGENT_TOOL_CATALOG.md before using their names as evidence.
+The accepted foundation is not an end-to-end trading strategy. Phase 40 adds a
+bounded Bull worker and two further canonical adapters; Bear and later desk phases
+remain pending. See AGENT_TOOL_CATALOG.md before using tool names as evidence.

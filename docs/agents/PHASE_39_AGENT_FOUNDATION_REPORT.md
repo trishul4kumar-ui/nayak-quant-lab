@@ -14,9 +14,10 @@ The provider requires `OPENAI_API_KEY` and an explicit `QUANT_LAB_AGENT_MODEL`.
 Presence of credentials is CONFIGURED/NOT_TESTED, never verified connectivity.
 No remote model request or credential change was made during implementation.
 
-Acceptance results and the exact remaining `CI_RED` gate are recorded in
-BUILD_PROGRAM_39_53.md. Phase 39 is implemented locally but not release-accepted;
-phases 40–53 remain pending. No production or profitability claim is made.
+Phase 39 is release-accepted for `3abef8f`: all required cloud gates passed in
+[CI run 37175625914](https://github.com/trishul4kumar-ui/nayak-quant-lab/actions/runs/37175625914).
+Publication and the portability/test/workflow fixes are recorded in
+BUILD_PROGRAM_39_53.md. No production or profitability claim is made.
 
 ## Included improvements
 
