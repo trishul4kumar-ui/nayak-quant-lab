@@ -276,6 +276,11 @@ class AiQuantDeskPage(LabPageShell):
                         ]
                         if bull_transitions:
                             active = bull_transitions[-1]
+                            active_tools = [
+                                row
+                                for row in repository.list(AgentToolResult)
+                                if row.run_id == active.run_id
+                            ]
                             self._bull.task.setText(f"{active.state} · {active.task}")
                             self._bull.timeline.setPlainText(
                                 "\n".join(
@@ -284,12 +289,18 @@ class AiQuantDeskPage(LabPageShell):
                                     for row in bull_transitions
                                     if row.run_id == active.run_id
                                 )
+                                + "\n\nCANONICAL TOOL CALLS\n"
+                                + "\n".join(
+                                    f"{row.tool}: {row.status} · {row.error_code or 'completed'}\n"
+                                    f"{row.content_hash}"
+                                    for row in active_tools
+                                )
                             )
                             states[-1] = AgentVisualStateDTO(
                                 agent=role,
                                 state=active.state,
                                 task_label=active.task,
-                                completed_tools=len(active.tool_result_hashes),
+                                completed_tools=len(active_tools),
                                 raw_confidence=(
                                     memos[-1].raw_confidence
                                     if memos and memos[-1].context_hash == active.context_hash

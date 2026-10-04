@@ -87,6 +87,9 @@ def test_native_bull_run_history_and_evidence_navigation(
         assert "NOT_TESTED" in page._bull.challenge.toPlainText()
         assert "SYNTHETIC" in page._bull.scope.text()
         assert page._bull.history.count() == 1
+        assert "CANONICAL TOOL CALLS" in page._bull.timeline.toPlainText()
+        assert "query_factor: COMPLETED" in page._bull.timeline.toPlainText()
+        assert "run_validation: UNAVAILABLE" in page._bull.timeline.toPlainText()
         page._bull.search.setText("does-not-match-any-thesis")
         assert page._bull.history.item(0).isHidden()
         page._bull.search.clear()

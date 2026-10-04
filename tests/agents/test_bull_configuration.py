@@ -38,6 +38,16 @@ def test_import_size_limit_blocks_before_reading(tmp_path: Path) -> None:
         read_snapshot(target)
 
 
+def test_invalid_secret_like_model_blocks_without_startup_crash(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("OPENAI_API_KEY", "configuration-fixture")
+    monkeypatch.setenv("QUANT_LAB_AGENT_MODEL", "sk-" + "invalidmodel" * 2)
+    assert not configured_provider().health().configured
+
+
 def test_cli_runs_and_searches_frozen_bull_history(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

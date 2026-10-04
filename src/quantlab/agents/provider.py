@@ -187,11 +187,16 @@ class AgentProviderSettings(BaseSettings):
 
 
 def configured_provider() -> AgentModelProvider:
-    settings = AgentProviderSettings()
-    key, model = settings.openai_api_key, settings.quant_lab_agent_model
-    if key is None or not key.get_secret_value() or not model:
+    try:
+        settings = AgentProviderSettings()
+        key, model = settings.openai_api_key, settings.quant_lab_agent_model
+        if key is None or not key.get_secret_value() or not model:
+            return UnavailableProvider()
+        return OpenAIResponsesProvider(model, key)
+    except (ValueError, OSError):
+        # Invalid local configuration blocks research without crashing app startup
+        # or including potentially secret-bearing settings in an error message.
         return UnavailableProvider()
-    return OpenAIResponsesProvider(model, key)
 
 
 class ProviderRunner:
