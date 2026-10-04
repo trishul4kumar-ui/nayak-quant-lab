@@ -9,7 +9,10 @@ PATTERN = r'''(api[_-]?key|access[_-]?token|secret)[[:space:]]*=[[:space:]]*["']
 
 def main() -> int:
     result = subprocess.run(
-        ["git", "grep", "-n", "-I", "-i", "-E", PATTERN, "--", ":!*.example", ":!.github/workflows/*"],
+        [
+            "git", "grep", "-n", "-I", "-i", "-E", PATTERN, "--",
+            ":!*.example", ":!.github/workflows/*",
+        ],
         capture_output=True,
         text=True,
         check=False,
