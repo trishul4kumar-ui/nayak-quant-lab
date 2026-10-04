@@ -21,8 +21,8 @@ never replaced with synthetic evidence or a completion claim.
 | Phase | Status | Next evidence required |
 |---|---|---|
 | 39 Foundation | Accepted | CI green for `3abef8f` |
-| 40 Bull | Implemented; verification in progress | Local and published release gates |
-| 41 Bear | Pending | Shared contracts and Bull accepted |
+| 40 Bull | Accepted | CI green for `6aa8651`; 1,482 local tests passed |
+| 41 Bear | Implemented; verification in progress | Local and published release gates |
 | 42 Debate | Pending | Independent frozen memos |
 | 43 Adjudication | Pending | Bounded debate accepted |
 | 44 Levels | Pending | Deterministic evidence decision |
@@ -72,7 +72,7 @@ printed. Secret and optimized-mode checks now run before the long covered suite.
 
 Foundation acceptance: all cloud gates passed for `3abef8f` in
 [CI run 37175625914](https://github.com/trishul4kumar-ui/nayak-quant-lab/actions/runs/37175625914).
-Phase 40 began only after this result. Phases 41–53 remain pending; phase 53
+Phase 40 began only after this result. At foundation acceptance, Phases 41–53 remained pending; phase 53
 additionally requires the separately documented durability work,
 sustained real production-shadow evidence, and explicit human execution controls.
 
@@ -99,6 +99,15 @@ sustained real production-shadow evidence, and explicit human execution controls
   unknown tools, denied grants, schema refusal, timeout, cancellation, and restart
   behavior covered. No model or live broker request was dispatched during validation.
 
-The accepted foundation is not an end-to-end trading strategy. Phase 40 adds a
-bounded Bull worker and two further canonical adapters; Bear and later desk phases
-remain pending. See AGENT_TOOL_CATALOG.md before using tool names as evidence.
+The accepted foundation is not an end-to-end trading strategy. See
+AGENT_TOOL_CATALOG.md before using tool names as evidence.
+
+## Bull acceptance and Bear progression
+
+Phase 40 passed all published gates for `6aa8651` in
+[CI run 37177882546](https://github.com/trishul4kumar-ui/nayak-quant-lab/actions/runs/37177882546).
+The exact local checkout passed **1,482 tests in 402.73 seconds**, Ruff, and strict
+mypy across 829 source files. Phase 41 began only after the cloud result was green.
+It adds an independent Bear mandate/memo and mirrored native workspace on the same
+bounded worker infrastructure; missing instrument eligibility stays UNKNOWN.
+Phase 42 cannot begin until Phase 41's release checks also pass.

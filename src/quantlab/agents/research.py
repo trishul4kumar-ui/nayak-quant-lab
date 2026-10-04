@@ -77,7 +77,7 @@ class DraftAnswer(Draft):
     answer: str = Field(min_length=10, max_length=1200)
 
 
-class BullMemoDraft(Draft):
+class AnalystMemoDraft(Draft):
     security_scope: tuple[str, ...] = Field(min_length=1, max_length=20)
     horizon: str = Field(min_length=3, max_length=120)
     hypothesis: str = Field(min_length=10, max_length=1200)
@@ -85,7 +85,7 @@ class BullMemoDraft(Draft):
     evidence_for: tuple[str, ...] = Field(max_length=12)
     evidence_against: tuple[str, ...] = Field(max_length=12)
     invalidation_conditions: tuple[str, ...] = Field(min_length=2, max_length=8)
-    stance: Literal["LONG_CANDIDATE", "MORE_RESEARCH", "NO_TRADE"]
+    stance: str
     entry: EntryArchetype
     exit: ExitArchetype
     raw_confidence: float = Field(ge=0, le=1)
@@ -99,11 +99,34 @@ class BullMemoDraft(Draft):
             raise ValueError("all seven self-falsification questions are required")
         if self.stance == "NO_TRADE" and not self.no_trade_reason:
             raise ValueError("NO_TRADE requires a reason")
-        if self.stance == "LONG_CANDIDATE" and not self.evidence_for:
+        if self.stance in {"LONG_CANDIDATE", "SHORT_CANDIDATE"} and not self.evidence_for:
             raise ValueError("a long candidate requires supporting evidence")
         if any(len(item.strip()) < 10 for item in self.invalidation_conditions):
             raise ValueError("invalidation conditions must be explicit")
         return self
+
+
+class BullMemoDraft(AnalystMemoDraft):
+    stance: Literal["LONG_CANDIDATE", "MORE_RESEARCH", "NO_TRADE"]
+
+
+class BearExposure(StrEnum):
+    AVOID = "AVOID"
+    SELL_EXISTING = "SELL_EXISTING"
+    INTRADAY_SHORT_RESEARCH = "INTRADAY_SHORT_RESEARCH"
+    FUTURE_SHORT_RESEARCH = "FUTURE_SHORT_RESEARCH"
+    PUT_RESEARCH = "PUT_RESEARCH"
+    HEDGE_RESEARCH = "HEDGE_RESEARCH"
+    NO_VALID_EXPOSURE = "NO_VALID_EXPOSURE"
+
+
+class BearMemoDraft(AnalystMemoDraft):
+    stance: Literal[
+        "SHORT_CANDIDATE", "AVOID", "REDUCE", "HEDGE", "EXIT", "MORE_RESEARCH", "NO_TRADE"
+    ]
+    exposure: BearExposure
+    squeeze_reversal_risks: tuple[str, ...] = Field(min_length=1, max_length=8)
+    liquidity_risks: tuple[str, ...] = Field(min_length=1, max_length=8)
 
 
 class ResearchScreen(Artifact):
@@ -132,7 +155,7 @@ class EvidenceSection(Artifact):
     note: str
 
 
-class BullResearchMemo(AgentResearchMemo):
+class AnalystResearchMemo(AgentResearchMemo):
     preferred_exit_archetype: ExitArchetype
     screen_hash: str
     plan_hash: str
@@ -141,6 +164,17 @@ class BullResearchMemo(AgentResearchMemo):
     data_kind: str
     outcome_status: Literal["NOT_TESTED"] = "NOT_TESTED"
     note: str = "Unvalidated research, not an order. Raw confidence is an opinion."
+
+
+class BullResearchMemo(AnalystResearchMemo):
+    pass
+
+
+class BearResearchMemo(AnalystResearchMemo):
+    exposure_archetype: BearExposure
+    instrument_eligibility: Literal["UNKNOWN"] = "UNKNOWN"
+    squeeze_reversal_risks: tuple[str, ...]
+    liquidity_risks: tuple[str, ...]
 
 
 class FrozenResearchPlan(Artifact):

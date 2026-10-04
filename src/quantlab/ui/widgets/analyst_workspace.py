@@ -14,15 +14,24 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from quantlab.agents.research import BullResearchMemo
+from quantlab.agents.contracts import AgentRole
+from quantlab.agents.research import AnalystResearchMemo, BearResearchMemo
 
 
 class AnalystWorkspace(QWidget):
     historySelected = Signal(str)
 
-    def __init__(self, parent: QWidget | None = None) -> None:
+    def __init__(self, parent: QWidget | None = None, *, role: AgentRole = AgentRole.BULL) -> None:
         super().__init__(parent)
         layout = QVBoxLayout(self)
+        role_title = QLabel(
+            "BEAR · downside, squeeze and liquidity research"
+            if role is AgentRole.BEAR
+            else "BULL · continuation and relative-strength research"
+        )
+        role_title.setObjectName("analystWorkspaceTitle")
+        role_title.setWordWrap(True)
+        layout.addWidget(role_title)
         self.task = QLabel("No analyst runs yet · load or capture a healthy snapshot to start.")
         self.task.setWordWrap(True)
         layout.addWidget(self.task)
@@ -41,6 +50,9 @@ class AnalystWorkspace(QWidget):
         vertical.addWidget(horizontal)
         self.tabs = QTabWidget()
         self.memo = self._panel("Frozen research memo")
+        self.memo.setPlainText(
+            "No analyst runs yet. Run explicit research to create a frozen memo."
+        )
         self.challenge = self._panel("Self-falsification and uncertainties")
         self.timeline = self._panel("Actual tool and state timeline")
         for widget, title in (
@@ -53,9 +65,11 @@ class AnalystWorkspace(QWidget):
         history_layout = QVBoxLayout(history)
         self.search = QLineEdit()
         self.search.setPlaceholderText("Search scope, thesis, invalidation, factor exposure…")
-        self.search.setAccessibleName("Search Bull research history")
+        self.search.setAccessibleName(f"Search {role.value.title()} research history")
         self.history = QListWidget()
-        self.history.setAccessibleName("Previous Bull hypotheses; outcomes not yet measured")
+        self.history.setAccessibleName(
+            f"Previous {role.value.title()} hypotheses; outcomes not yet measured"
+        )
         self.search.textChanged.connect(self._filter)
         self.history.currentRowChanged.connect(self._select)
         history_layout.addWidget(self.search)
@@ -76,7 +90,7 @@ class AnalystWorkspace(QWidget):
         panel.setMinimumHeight(110)
         return panel
 
-    def show_memo(self, memo: BullResearchMemo) -> None:
+    def show_memo(self, memo: AnalystResearchMemo) -> None:
         self.scope.setText(
             f"{memo.data_kind} · {memo.as_of.isoformat()} · "
             + ", ".join(memo.security_scope)
@@ -91,6 +105,15 @@ class AnalystWorkspace(QWidget):
             "Calibrated confidence: NOT_TESTED\nRealized outcome: NOT_TESTED\n"
             f"{memo.no_trade_reason or ''}\n\nMemo hash: {memo.content_hash}"
         )
+        if isinstance(memo, BearResearchMemo):
+            self.memo.setPlainText(
+                self.memo.toPlainText() + f"\nExposure intent: {memo.exposure_archetype}\n"
+                f"Instrument eligibility: {memo.instrument_eligibility}\n"
+                "No verified position or execution authority.\n\nSqueeze / reversal risk\n"
+                + "\n".join(memo.squeeze_reversal_risks)
+                + "\n\nLiquidity / implementation risk\n"
+                + "\n".join(memo.liquidity_risks)
+            )
         self.support.setPlainText(
             "SUPPORT · interpretations unverified\n\n"
             + "\n\n".join(
@@ -114,7 +137,7 @@ class AnalystWorkspace(QWidget):
             + "\n".join(row.description for row in memo.uncertainties)
         )
 
-    def set_history(self, memos: tuple[BullResearchMemo, ...]) -> None:
+    def set_history(self, memos: tuple[AnalystResearchMemo, ...]) -> None:
         previous = self.history.currentRow()
         self.history.blockSignals(True)
         self.history.clear()

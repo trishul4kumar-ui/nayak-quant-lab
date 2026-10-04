@@ -9,10 +9,16 @@ from pathlib import Path
 from PySide6.QtCore import QTimer
 from PySide6.QtWidgets import QCheckBox, QFileDialog, QLabel, QPushButton, QTabWidget, QTextBrowser
 
-from quantlab.agents.bull import BullWorker, create_bull_context, search_bull_history
-from quantlab.agents.contracts import AgentRole, AgentRunRecord, AgentState, ResearchMode
+from quantlab.agents.bear import BearWorker, bear_mandate, create_bear_context, search_bear_history
+from quantlab.agents.bull import BullWorker, bull_mandate, create_bull_context, search_bull_history
+from quantlab.agents.contracts import (
+    AgentRole,
+    AgentRunContext,
+    AgentRunRecord,
+    AgentState,
+    ResearchMode,
+)
 from quantlab.agents.inputs import read_history, read_snapshot
-from quantlab.agents.permissions import mandate_for
 from quantlab.agents.presentation import (
     AgentDeskPresentationService,
     AgentVisualStateDTO,
@@ -20,7 +26,7 @@ from quantlab.agents.presentation import (
 )
 from quantlab.agents.provider import configured_provider
 from quantlab.agents.repository import AgentRepository
-from quantlab.agents.research import BullResearchMemo, ResearchTransition
+from quantlab.agents.research import BearResearchMemo, BullResearchMemo, ResearchTransition
 from quantlab.agents.tool_contracts import AgentToolResult
 from quantlab.agents.tool_gateway import AgentToolGateway
 from quantlab.ai.permissions import DENIED_CAPABILITIES
@@ -46,6 +52,7 @@ class AiQuantDeskPage(LabPageShell):
         self._snapshot_path: Path | None = None
         self._history_path: Path | None = None
         self._job_id: str | None = None
+        self._job_role = AgentRole.BULL
         self._status = QLabel()
         self._status.setObjectName("deskProviderStatus")
         self._status.setWordWrap(True)
@@ -57,10 +64,15 @@ class AiQuantDeskPage(LabPageShell):
         self._tabs.setAccessibleName("AI desk foundation inspectors")
         self._inspectors: dict[str, QTextBrowser] = {}
         self._bull = AnalystWorkspace()
-        self._bull.historySelected.connect(self._open_memo)
+        self._bull.historySelected.connect(lambda key: self._open_memo(key, AgentRole.BULL))
         self._tabs.addTab(self._bull, "Bull")
         self._inspectors["Bull"] = self._bull.memo
-        for name in ("Bear", "Permissions", "Tools", "Audit"):
+        self._bear = AnalystWorkspace(role=AgentRole.BEAR)
+        self._bear.historySelected.connect(lambda key: self._open_memo(key, AgentRole.BEAR))
+        self._tabs.addTab(self._bear, "Bear")
+        self._inspectors["Bear"] = self._bear.memo
+        self._workspaces = {AgentRole.BULL: self._bull, AgentRole.BEAR: self._bear}
+        for name in ("Permissions", "Tools", "Audit"):
             inspector = QTextBrowser()
             inspector.setOpenExternalLinks(False)
             inspector.setAccessibleName(f"{name} research inspector")
@@ -84,6 +96,9 @@ class AiQuantDeskPage(LabPageShell):
         self._run_button = QPushButton("Run Bull research")
         self._run_button.clicked.connect(self._run_bull)
         self.add_toolbar_widget(self._run_button)
+        self._bear_button = QPushButton("Run Bear research")
+        self._bear_button.clicked.connect(lambda: self._run_analyst(AgentRole.BEAR))
+        self.add_toolbar_widget(self._bear_button)
         self._cancel_button = QPushButton("Cancel research")
         self._cancel_button.clicked.connect(self._cancel_bull)
         self._cancel_button.setEnabled(False)
@@ -93,6 +108,8 @@ class AiQuantDeskPage(LabPageShell):
         self._timer.timeout.connect(self.refresh)
         self.register_splitter(self._bull.main_splitter, "bull-workspace")
         self.register_splitter(self._bull.evidence_splitter, "bull-evidence")
+        self.register_splitter(self._bear.main_splitter, "bear-workspace")
+        self.register_splitter(self._bear.evidence_splitter, "bear-evidence")
         self.bind_splitter_preferences(layout_id="ai-quant-desk", settings=runtime.ui_settings)
         self.refresh()
 
@@ -104,11 +121,13 @@ class AiQuantDeskPage(LabPageShell):
                 repository = AgentRepository(self._repo_path)
                 try:
                     result = repository.get(identity, AgentToolResult)
-                    self._bull.timeline.setPlainText(
+                    context = repository.get(result.context_hash, AgentRunContext)
+                    workspace = self._workspaces[context.agent.role]
+                    workspace.timeline.setPlainText(
                         json.dumps(result.model_dump(mode="json"), indent=2)
                     )
-                    self._bull.tabs.setCurrentIndex(2)
-                    self._tabs.setCurrentIndex(0)
+                    workspace.tabs.setCurrentIndex(2)
+                    self._tabs.setCurrentWidget(workspace)
                 finally:
                     repository.close()
             except (OSError, RuntimeError, ValueError, KeyError):
@@ -126,18 +145,24 @@ class AiQuantDeskPage(LabPageShell):
             self._history_path = Path(filename)
         else:
             self._snapshot_path = Path(filename)
-        self._bull.task.setText(
-            "Input selected; scope, provenance and availability are checked on run."
-        )
+        for workspace in self._workspaces.values():
+            workspace.task.setText(
+                "Input selected; scope, provenance and availability are checked on run."
+            )
 
     def _run_bull(self) -> None:
+        self._run_analyst(AgentRole.BULL)
+
+    def _run_analyst(self, role: AgentRole) -> None:
+        workspace = self._workspaces[role]
+        self._tabs.setCurrentWidget(workspace)
         if self._job_id:
-            self._bull.task.setText(
+            workspace.task.setText(
                 "A research job is already running. Cancel it before starting another."
             )
             return
         if not self._provider.health().configured:
-            self._bull.task.setText(
+            workspace.task.setText(
                 "BLOCKED · configure OPENAI_API_KEY and QUANT_LAB_AGENT_MODEL "
                 "locally in .env. Never paste credentials into this workspace."
             )
@@ -147,7 +172,7 @@ class AiQuantDeskPage(LabPageShell):
                 read_snapshot(self._snapshot_path) if self._snapshot_path else inspect_snapshot()
             )
             if snapshot is None:
-                self._bull.task.setText(
+                workspace.task.setText(
                     "BLOCKED · capture a market-data snapshot or load saved JSON. "
                     "No mock data is substituted automatically."
                 )
@@ -158,7 +183,8 @@ class AiQuantDeskPage(LabPageShell):
             )
             repository = AgentRepository(self._repo_path)
             try:
-                context = create_bull_context(
+                factory = create_bull_context if role is AgentRole.BULL else create_bear_context
+                context = factory(
                     repository,
                     snapshot,
                     self._provider,
@@ -169,7 +195,7 @@ class AiQuantDeskPage(LabPageShell):
             finally:
                 repository.close()
         except (OSError, RuntimeError, ValueError, KeyError):
-            self._bull.task.setText(
+            workspace.task.setText(
                 "BLOCKED · invalid/stale input or persistence failure. "
                 "Use Explicit replay only for intentional historical research."
             )
@@ -178,7 +204,8 @@ class AiQuantDeskPage(LabPageShell):
         def work(job: Job) -> dict[str, object]:
             repo = AgentRepository(self._repo_path)
             try:
-                record = BullWorker(repo, self._provider).run(context, cancel=job.cancel_event)
+                worker = BullWorker if role is AgentRole.BULL else BearWorker
+                record = worker(repo, self._provider).run(context, cancel=job.cancel_event)
                 return {
                     "run_id": record.run_id,
                     "record_hash": record.content_hash,
@@ -188,29 +215,33 @@ class AiQuantDeskPage(LabPageShell):
                 repo.close()
 
         job = self.runtime.jobs.submit(
-            "bull_research", work, {"context_hash": context.content_hash}
+            f"{role.value.lower()}_research", work, {"context_hash": context.content_hash}
         )
         self._job_id = job.job_id
+        self._job_role = role
         self._run_button.setEnabled(False)
+        self._bear_button.setEnabled(False)
         self._cancel_button.setEnabled(True)
-        self._bull.task.setText("Queued · frozen context verified · RESEARCH ONLY")
+        workspace.task.setText("Queued · frozen context verified · RESEARCH ONLY")
         self._timer.start()
 
     def _cancel_bull(self) -> None:
         if self._job_id:
             self.runtime.jobs.cancel(self._job_id)
-            self._bull.task.setText(
+            self._workspaces[self._job_role].task.setText(
                 "Cancellation requested; late model responses cannot freeze a memo."
             )
 
-    def _open_memo(self, memo_hash: str) -> None:
+    def _open_memo(self, memo_hash: str, role: AgentRole = AgentRole.BULL) -> None:
         repository: AgentRepository | None = None
+        workspace = self._workspaces[role]
         try:
             repository = AgentRepository(self._repo_path)
-            self._bull.show_memo(repository.get(memo_hash, BullResearchMemo))
-            self._bull.tabs.setCurrentIndex(0)
+            contract = BullResearchMemo if role is AgentRole.BULL else BearResearchMemo
+            workspace.show_memo(repository.get(memo_hash, contract))
+            workspace.tabs.setCurrentIndex(0)
         except (RuntimeError, ValueError, KeyError):
-            self._bull.task.setText("Saved memo could not be verified.")
+            workspace.task.setText("Saved memo could not be verified.")
         finally:
             if repository is not None:
                 repository.close()
@@ -226,9 +257,10 @@ class AiQuantDeskPage(LabPageShell):
                 self._job_id = None
                 self._timer.stop()
                 self._run_button.setEnabled(True)
+                self._bear_button.setEnabled(True)
                 self._cancel_button.setEnabled(False)
                 if job and job.status is not JobStatus.COMPLETED:
-                    self._bull.task.setText(
+                    self._workspaces[self._job_role].task.setText(
                         f"Research job {job.status}; inspect the persisted timeline."
                     )
         health = self._provider.health()
@@ -244,21 +276,23 @@ class AiQuantDeskPage(LabPageShell):
                 states = []
                 evidence: list[EvidenceNodeSummaryDTO] = []
                 transitions = repository.list(ResearchTransition)
-                for role, label in ((AgentRole.BULL, "Bull"), (AgentRole.BEAR, "Bear")):
+                for role, workspace in self._workspaces.items():
                     role_runs = []
-                    from quantlab.agents.contracts import AgentRunContext
-
                     for run in runs:
                         context = repository.get(run.context_hash, AgentRunContext)
                         if context.agent.role is role:
                             role_runs.append(run)
                     latest = role_runs[-1] if role_runs else None
                     states.append(presentation.from_run(role, latest))
-                    if role is AgentRole.BULL:
-                        memos = search_bull_history(repository)
-                        self._bull.set_history(memos)
+                    if role in self._workspaces:
+                        search = (
+                            search_bull_history if role is AgentRole.BULL else search_bear_history
+                        )
+                        contract = BullResearchMemo if role is AgentRole.BULL else BearResearchMemo
+                        memos = search(repository)
+                        workspace.set_history(memos)
                         if latest and latest.memo_hash:
-                            self._bull.show_memo(repository.get(latest.memo_hash, BullResearchMemo))
+                            workspace.show_memo(repository.get(latest.memo_hash, contract))
                         if memos:
                             evidence.extend(
                                 EvidenceNodeSummaryDTO(
@@ -268,25 +302,24 @@ class AiQuantDeskPage(LabPageShell):
                                 )
                                 for row in memos[-1].evidence_sections
                             )
-                        bull_transitions = [
+                        analyst_transitions = [
                             row
                             for row in transitions
-                            if repository.get(row.context_hash, AgentRunContext).agent.role
-                            is AgentRole.BULL
+                            if repository.get(row.context_hash, AgentRunContext).agent.role is role
                         ]
-                        if bull_transitions:
-                            active = bull_transitions[-1]
+                        if analyst_transitions:
+                            active = analyst_transitions[-1]
                             active_tools = [
                                 row
                                 for row in repository.list(AgentToolResult)
                                 if row.run_id == active.run_id
                             ]
-                            self._bull.task.setText(f"{active.state} · {active.task}")
-                            self._bull.timeline.setPlainText(
+                            workspace.task.setText(f"{active.state} · {active.task}")
+                            workspace.timeline.setPlainText(
                                 "\n".join(
                                     f"{row.sequence} · {row.state} · {row.task} · "
                                     f"{len(row.tool_result_hashes)} completed tools"
-                                    for row in bull_transitions
+                                    for row in analyst_transitions
                                     if row.run_id == active.run_id
                                 )
                                 + "\n\nCANONICAL TOOL CALLS\n"
@@ -308,19 +341,12 @@ class AiQuantDeskPage(LabPageShell):
                                 ),
                             )
                         continue
-                    self._inspectors[label].setPlainText(
-                        json.dumps(
-                            [row.model_dump(mode="json") for row in role_runs[-50:]],
-                            indent=2,
-                        )
-                        if role_runs
-                        else "No analyst runs yet. Phase 39 establishes contracts."
-                    )
-                mandate = mandate_for(AgentRole.BULL, created_at=datetime(2026, 10, 4, tzinfo=UTC))
+                mandate = bull_mandate(datetime(2026, 10, 4, tzinfo=UTC))
                 self._inspectors["Permissions"].setPlainText(
                     json.dumps(
                         {
                             "allowed": sorted(mandate.granted),
+                            "bear_allowed": sorted(bear_mandate(mandate.created_at).granted),
                             "permanently_denied": sorted(DENIED_CAPABILITIES),
                         },
                         indent=2,

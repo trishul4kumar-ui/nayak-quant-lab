@@ -5,10 +5,10 @@ import json
 from datetime import UTC, datetime
 from pathlib import Path
 
-from quantlab.agents.bull import BullWorker, create_bull_context, search_bull_history
-from quantlab.agents.contracts import AgentRole, AgentRunRecord, AgentState, ResearchMode
+from quantlab.agents.bear import BearWorker, bear_mandate, create_bear_context, search_bear_history
+from quantlab.agents.bull import BullWorker, bull_mandate, create_bull_context, search_bull_history
+from quantlab.agents.contracts import AgentRunRecord, AgentState, ResearchMode
 from quantlab.agents.inputs import read_history, read_snapshot
-from quantlab.agents.permissions import mandate_for
 from quantlab.agents.provider import configured_provider
 from quantlab.agents.repository import AgentRepository
 from quantlab.agents.tool_gateway import AgentToolGateway
@@ -28,6 +28,8 @@ def add_agents_parser(sub: argparse._SubParsersAction[argparse.ArgumentParser]) 
             "provider-health",
             "run-bull",
             "bull-history",
+            "run-bear",
+            "bear-history",
         ),
     )
     parser.add_argument("--run-id")
@@ -53,14 +55,17 @@ def _run_agents_command(args: argparse.Namespace) -> int:
     exit_code = 0
     try:
         provider = configured_provider()
-        mandate = mandate_for(AgentRole.BULL, created_at=datetime(2026, 10, 4, tzinfo=UTC))
-        if args.agents_action == "run-bull":
+        mandate = bull_mandate(datetime(2026, 10, 4, tzinfo=UTC))
+        if args.agents_action in {"run-bull", "run-bear"}:
             if args.snapshot is None:
                 raise ValueError("EXPLICIT_SNAPSHOT_REQUIRED")
             snapshot = read_snapshot(args.snapshot)
             now = datetime.now(UTC)
             history = read_history(args.history, snapshot, now) if args.history else None
-            context = create_bull_context(
+            factory = (
+                create_bull_context if args.agents_action == "run-bull" else create_bear_context
+            )
+            context = factory(
                 repository,
                 snapshot,
                 provider,
@@ -68,20 +73,24 @@ def _run_agents_command(args: argparse.Namespace) -> int:
                 history=history,
                 mode=ResearchMode.REPLAY if args.replay else ResearchMode.RESEARCH,
             )
-            run = BullWorker(repository, provider).run(context)
+            worker = BullWorker if args.agents_action == "run-bull" else BearWorker
+            run = worker(repository, provider).run(context)
             payload: object = run.model_dump(mode="json")
             if run.state in {AgentState.BLOCKED, AgentState.STALE, AgentState.ERROR}:
                 exit_code = 2
-        elif args.agents_action == "bull-history":
+        elif args.agents_action in {"bull-history", "bear-history"}:
+            search = (
+                search_bull_history if args.agents_action == "bull-history" else search_bear_history
+            )
             payload = [
-                memo.model_dump(mode="json")
-                for memo in search_bull_history(repository, args.query)[-100:]
+                memo.model_dump(mode="json") for memo in search(repository, args.query)[-100:]
             ]
         elif args.agents_action == "provider-health":
             payload = provider.health().model_dump(mode="json")
         elif args.agents_action == "permissions":
             payload = {
                 "allowed": sorted(mandate.granted),
+                "bear_allowed": sorted(bear_mandate(mandate.created_at).granted),
                 "always_denied": sorted(DENIED_CAPABILITIES),
             }
         elif args.agents_action == "tools":
