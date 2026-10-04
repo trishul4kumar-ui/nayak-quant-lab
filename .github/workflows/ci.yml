@@ -40,8 +40,8 @@ jobs:
         run: ruff check src tests
       - name: Mypy
         run: mypy src/quantlab
-      - name: Full test suite with coverage report
-        run: pytest -q --cov=quantlab --cov-report=term-missing
+      - name: Basic secret-pattern check
+        run: python scripts/check_tracked_secrets.py
       - name: Optimized-mode safety suite
         run: >-
           python -O -m pytest -q
@@ -49,10 +49,7 @@ jobs:
           tests/digital_twin tests/production_shadow tests/execution_authorization
           tests/restricted_execution tests/live_ops
           tests/agents
+      - name: Full test suite with coverage report
+        run: pytest -q --cov=quantlab --cov-report=term-missing
       - name: Build distribution
         run: python -m build
-      - name: Basic secret-pattern check
-        run: >-
-          ! git grep -n -I -E
-          '(api[_-]?key|access[_-]?token|secret)[[:space:]]*=[[:space:]]*["'"'][^"'"']{8,}'
-          -- ':!*.example' ':!.github/workflows/*'

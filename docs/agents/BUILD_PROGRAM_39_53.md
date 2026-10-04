@@ -65,6 +65,11 @@ upstream evidence in process-global stores. The missing-evidence authorization
 fixture now resets all its upstream stores. A separate regression asserts that
 an actual global kill still produces `BLOCKED`; no production safety rule changed.
 
+The next run passed both test suites and built distributions, then exposed broken
+shell quoting in the legacy final secret check. The same tracked-file assignment
+pattern now runs through a tested argument-list scanner; matching values are never
+printed. Secret and optimized-mode checks now run before the long covered suite.
+
 Phases 40–53 have not been implemented. Resume with Phase 40 only after this gate
 passes; phase 53 additionally requires the separately documented durability work,
 sustained real production-shadow evidence, and explicit human execution controls.
