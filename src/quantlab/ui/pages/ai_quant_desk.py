@@ -93,7 +93,7 @@ class AiQuantDeskPage(LabPageShell):
         self._timer.timeout.connect(self.refresh)
         self.register_splitter(self._bull.main_splitter, "bull-workspace")
         self.register_splitter(self._bull.evidence_splitter, "bull-evidence")
-        self.enable_terminal_layout(layout_id="ai-quant-desk", settings=runtime.ui_settings)
+        self.bind_splitter_preferences(layout_id="ai-quant-desk", settings=runtime.ui_settings)
         self.refresh()
 
     def _visual_navigation(self, intent: str, identity: str) -> None:

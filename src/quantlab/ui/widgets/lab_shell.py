@@ -372,6 +372,12 @@ class LabPageShell(QWidget):
         splitter.splitterMoved.connect(self._persist_workspace_layout)
         self._add_layout_reset()
 
+    def bind_splitter_preferences(self, *, layout_id: str, settings: UiSettingsStore) -> None:
+        """Persist page-owned panels without wrapping a flowing page in another splitter."""
+        self._workspace_layout_id = layout_id
+        self._workspace_settings = settings
+        self._restore_workspace_layout()
+
     def _add_layout_reset(self) -> None:
         if self._layout_reset is not None:
             return

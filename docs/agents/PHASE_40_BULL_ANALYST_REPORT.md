@@ -43,6 +43,9 @@ refusal/incomplete handling. See BULL_MANDATE.md for the operating and token bud
 - Initial full regression: 1,477 passed in 488.96 seconds. Final small concurrency,
   CLI-exit, layout-persistence and effective-time guards are additionally regression
   tested; the exact final checkout is being checked locally and in published CI.
+- The next full run passed 1,480 tests and found one layout-contract regression.
+  Page-owned panel preferences now bind without adding an outer nested splitter;
+  the existing flowing-page assertion is preserved rather than weakened.
 - Native desktop run completed `NO_TRADE` using a clearly labelled synthetic fixture;
   the rendered evidence/memo workspace was inspected at 1280×800.
 - Source distribution and wheel built; final distribution packaging is also in CI.
