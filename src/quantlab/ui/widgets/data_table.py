@@ -111,6 +111,29 @@ def _column_alignment(header: str) -> Qt.AlignmentFlag:
     return Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
 
 
+def update_table_values(table: QTableWidget, headers: list[str], rows: list[list[str]]) -> None:
+    """Update live values without destroying Qt accessibility objects or column widths."""
+    if table.property("live_headers") != headers:
+        fill_table(table, headers, rows)
+        if headers == ["Field", "Value"]:
+            table.setColumnWidth(0, 190)
+            table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
+        table.setProperty("live_headers", headers)
+        return
+    if table.rowCount() != len(rows):
+        table.setRowCount(len(rows))
+    for r, row in enumerate(rows):
+        for c, text in enumerate(row):
+            item = table.item(r, c)
+            if item is None:
+                item = QTableWidgetItem(text)
+                item.setTextAlignment(_column_alignment(headers[c]))
+                table.setItem(r, c, item)
+            elif item.text() != text:
+                item.setText(text)
+            item.setToolTip(text)
+
+
 def _apply_column_contract(table: QTableWidget, headers: list[str]) -> None:
     """Use stable, readable defaults; users can still resize/reorder any header."""
 

@@ -17,6 +17,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from quantlab.app.live_market import display_time
 from quantlab.app.settings_store import UiSettingsStore
 from quantlab.ui.responsive import ResponsiveState, responsive_state, valid_splitter_sizes
 from quantlab.ui.widgets.explain import ExplainChip
@@ -311,3 +312,74 @@ class WatchlistWidget(QTableWidget):
     def _on_cell(self, row: int, _col: int) -> None:
         if 0 <= row < len(self._rows):
             self.instrument_selected.emit(self._rows[row])
+
+    def set_quote_rows(self, rows: list[dict[str, Any]]) -> None:
+        """Live quotes have no fabricated momentum/close or automatic selection reset."""
+        current_row = self.currentRow()
+        selected = (
+            str(self._rows[current_row]["instrument"]) if 0 <= current_row < len(self._rows) else ""
+        )
+        self._rows = list(rows)
+        headers = [
+            "Instrument",
+            "LTP / value",
+            "Bid",
+            "Ask",
+            "Volume",
+            "Quote time",
+            "Age / quality",
+        ]
+        initialize = self.columnCount() != len(headers)
+        first_population = bool(rows) and self.rowCount() == 0
+        if initialize:
+            self.setColumnCount(len(headers))
+            self.setHorizontalHeaderLabels(headers)
+            value_header = self.horizontalHeaderItem(1)
+            if value_header is not None:
+                value_header.setToolTip(
+                    "Provider-native units: stock prices, index levels or yields. "
+                    "Not every instrument is a rupee-priced stock."
+                )
+        if self.rowCount() != len(rows):
+            self.setRowCount(len(rows))
+        self.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        self.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        self.horizontalHeader().setStretchLastSection(True)
+        select = 0
+        for r, row in enumerate(rows):
+
+            def number(key: str, places: int = 2, index: int = r) -> str:
+                value = self._rows[index].get(key)
+                return "—" if value is None else f"{value:,.{places}f}"
+
+            age = row.get("age_seconds")
+            quality = str(row["quality"])
+            cells = [
+                str(row["instrument"]),
+                number("price"),
+                number("bid"),
+                number("ask"),
+                number("volume", 0),
+                display_time(row.get("quote_time")),
+                f"{age:.1f}s · {quality}" if age is not None else f"— · {quality}",
+            ]
+            if row["instrument"] == selected:
+                select = r
+            for c, cell in enumerate(cells):
+                item = self.item(r, c)
+                if item is None:
+                    item = QTableWidgetItem(cell)
+                    self.setItem(r, c, item)
+                elif item.text() != cell:
+                    item.setText(cell)
+                if c == 6:
+                    item.setForeground(QColor("#26a69a" if quality == "valid" else "#ffb74d"))
+                item.setToolTip(
+                    f"{row['source']}\nProvider: {display_time(row.get('quote_time'))}\n"
+                    f"Received: {display_time(row.get('receive_time'))}\n{row['note']}"
+                )
+        if initialize or first_population:
+            self.resizeColumnsToContents()
+        if rows:
+            self.selectRow(select)
+            self.instrument_selected.emit(rows[select])

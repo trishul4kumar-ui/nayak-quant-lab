@@ -6,6 +6,7 @@ from pydantic import BaseModel
 
 from quantlab.app.health import ComponentStatus, HealthReport
 from quantlab.app.mode import AppMode
+from quantlab.broker_gateway.state import current as broker_state
 from quantlab.core.config import LiveSafetyGates
 from quantlab.risk.states import RiskState
 
@@ -40,7 +41,7 @@ class SystemStatus(BaseModel):
 
         system = "HEALTHY" if report.research_ready() else "DEGRADED"
         live = "DISABLED" if not gates.live_trading else "ENABLED"
-        broker = "DISCONNECTED"
+        broker = broker_state().value.upper().replace("_", " ")
         return cls(
             system=system,
             data=label("data_store", "READY"),

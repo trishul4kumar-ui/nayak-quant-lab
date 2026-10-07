@@ -8,7 +8,7 @@ from multiprocessing import freeze_support
 from pathlib import Path
 
 
-def main(argv: list[str] | None = None) -> int:
+def main(argv: list[str] | None = None, *, kite_quotes: bool = False) -> int:
     freeze_support()
     try:
         import PySide6.QtWidgets  # noqa: F401 — probe PySide6 install
@@ -17,7 +17,7 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     try:
-        return _run_desktop(argv)
+        return _run_desktop(argv, kite_quotes=kite_quotes)
     except Exception:
         import traceback
 
@@ -25,11 +25,12 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
 
-def _run_desktop(argv: list[str] | None) -> int:
+def _run_desktop(argv: list[str] | None, *, kite_quotes: bool = False) -> int:
     from PySide6.QtCore import QCoreApplication, Qt
     from PySide6.QtWidgets import QApplication
 
     from quantlab.app.bootstrap import bootstrap
+    from quantlab.app.settings_store import ExperienceMode
     from quantlab.ui.main_window import MainWindow
     from quantlab.ui.splash import SplashDialog
     from quantlab.ui.theme import apply_theme
@@ -52,7 +53,13 @@ def _run_desktop(argv: list[str] | None) -> int:
         elif not runtime.health.research_ready():
             SplashDialog(runtime).exec()
 
+    if kite_quotes:
+        runtime.ui_settings.current.experience_mode = ExperienceMode.FULL
     window = MainWindow(runtime)
+    if kite_quotes:
+        window._select_nav("market")
+        runtime.live_market.start()
+        window.market.refresh()
     window.show()
     window.raise_()
     window.activateWindow()
