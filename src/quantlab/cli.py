@@ -38,6 +38,7 @@ from quantlab.orchestration.cli import (
     run_hypothesis_command,
 )
 from quantlab.paper_oms.cli import add_paper_parser, run_paper_command
+from quantlab.phase53.cli import add_phase53_parser, run_phase53_command
 from quantlab.portfolio.cli import add_portfolio_parser, run_portfolio_command
 from quantlab.production_shadow.cli import (
     add_production_shadow_parser,
@@ -104,6 +105,7 @@ def main() -> None:
     add_knowledge_parser(sub)
     add_capital_parser(sub)
     add_paper_parser(sub)
+    add_phase53_parser(sub)
     add_monitor_parser(sub)
     add_ops_parser(sub)
     add_live_ops_parser(sub)
@@ -196,6 +198,8 @@ def main() -> None:
         raise SystemExit(run_capital_command(args))
     elif args.cmd == "paper":
         raise SystemExit(run_paper_command(args))
+    elif args.cmd == "phase53":
+        raise SystemExit(run_phase53_command(args))
     elif args.cmd == "monitor":
         raise SystemExit(run_monitor_command(args))
     elif args.cmd == "ops":

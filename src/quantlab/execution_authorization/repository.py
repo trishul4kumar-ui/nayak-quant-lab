@@ -60,6 +60,19 @@ def approval(approval_id: str) -> HumanApprovalRecord | None:
         return _APPROVALS.get(approval_id)
 
 
+def approval_for_assessment(assessment_id: str) -> HumanApprovalRecord | None:
+    """Return the latest approval bound to an assessment without creating authority."""
+    with _LOCK:
+        return next(
+            (
+                item
+                for item in reversed(tuple(_APPROVALS.values()))
+                if item.assessment_id == assessment_id
+            ),
+            None,
+        )
+
+
 def put_revocation(item: AuthorizationRevocation) -> AuthorizationRevocation:
     with _LOCK:
         if item.approval_id in _REVOKED:
