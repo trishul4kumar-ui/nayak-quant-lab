@@ -12,7 +12,16 @@ from quantlab.realtime_data.kite import (
     KiteMarketDataConfig,
 )
 from quantlab.realtime_data.models import QualityStatus
-from quantlab.realtime_data.service import reset_for_tests, snapshot, start
+from quantlab.realtime_data.service import (
+    fetch_kite_snapshot,
+    inspect,
+    list_snapshots,
+    reset_for_tests,
+    save_observed_snapshot,
+    snapshot,
+    source_status,
+    start,
+)
 
 pytestmark = pytest.mark.realtime_data
 
@@ -83,6 +92,36 @@ def test_kite_quote_adapter_uses_read_only_quote_path_and_freezes_provenance() -
     assert transport.calls[0][1]["Authorization"] == "token test-key:test-token"
 
 
+def test_desktop_capture_is_isolated_and_only_explicit_capture_is_saved(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    start()
+    demo = snapshot()
+    transport = _Transport({"status": "success", "data": {"NSE:INFY": _quote("NSE:INFY", 1500)}})
+    adapter = KiteMarketDataAdapter(_config("NSE:INFY"), transport=transport, clock=lambda: _NOW)
+    monkeypatch.setattr(KiteMarketDataAdapter, "from_environment", lambda: adapter)
+    frozen = fetch_kite_snapshot()
+    assert list_snapshots() == [demo.snapshot_id]
+    assert source_status()["active_source"] != "kite-rest-quote-v3"
+    assert frozen.extras["active_source"] == "kite-rest-quote-v3"
+    assert frozen.extras["max_quote_age_seconds"] == 5
+    assert frozen.live_trading is False
+    assert len(transport.calls) == 1 and transport.calls[0][0].startswith("/quote?")
+    assert adapter.source_health()["connected"] is False
+    save_observed_snapshot(frozen)
+    assert inspect("last") == frozen
+
+
+@pytest.mark.parametrize("flag", ["LIVE_TRADING", "BROKER_WRITE_ENABLED"])
+def test_desktop_capture_refuses_write_enabled_safety_state(
+    flag: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv(flag, "true")
+    with pytest.raises(RealTimeDataError, match="refuses"):
+        fetch_kite_snapshot()
+
+
 def test_missing_quote_timestamp_and_instrument_degrade_never_upgrade_quality() -> None:
     row = _quote("NSE:INFY", 1500.0)
     row.pop("timestamp")
@@ -135,3 +174,39 @@ def test_kite_adapter_rejects_non_successful_response_without_exposing_body() ->
 def test_kite_adapter_requires_explicit_exchange_scoped_symbols() -> None:
     with pytest.raises(RealTimeDataError, match="EXCHANGE:SYMBOL"):
         KiteMarketDataAdapter(_config("INFY"), transport=_Transport({}), clock=lambda: _NOW)
+
+
+def test_mixed_watchlist_preserves_listings_and_index_units_without_fake_depth() -> None:
+    symbols = ["NSE:BEL", "BSE:BEL", "NSE:NIFTY 50", "BSE:SENSEX", "GLOBAL:US10YRYIELD"]
+    data = {symbol: _quote(symbol, 380.5) for symbol in symbols[:2]}
+    for symbol, value in zip(symbols[2:], (22617.0, 72640.24, 5.27), strict=True):
+        data[symbol] = {"last_price": value, "timestamp": "2026-10-03 09:30:00"}
+    transport = _Transport({"status": "success", "data": data})
+    adapter = KiteMarketDataAdapter(
+        _config(",".join(symbols)), transport=transport, clock=lambda: _NOW
+    )
+    adapter.connect()
+    rows = adapter.poll()
+
+    assert [row.security_id for row in rows] == symbols
+    assert rows[0].venue == "NSE" and rows[1].venue == "BSE"
+    assert rows[-1].venue == "GLOBAL" and rows[-1].price == 5.27
+    assert all(row.quality is QualityStatus.VALID and not row.live_trading for row in rows)
+    assert all(row.bid is None and row.ask is None and row.volume is None for row in rows[2:])
+    assert "i=NSE%3ANIFTY+50" in transport.calls[0][0]
+    assert "i=GLOBAL%3AUS10YRYIELD" in transport.calls[0][0]
+    assert adapter.source_health()["coverage"] == 1.0
+
+
+@pytest.mark.parametrize(
+    ("symbols", "message"),
+    [
+        ("NSE:BEL,NSE:BEL", "duplicate"),
+        (",".join(f"NSE:TEST{i}" for i in range(501)), "at most 500"),
+    ],
+)
+def test_watchlist_rejects_duplicates_and_provider_limit_overflow(
+    symbols: str, message: str
+) -> None:
+    with pytest.raises(RealTimeDataError, match=message):
+        KiteMarketDataAdapter(_config(symbols), transport=_Transport({}), clock=lambda: _NOW)

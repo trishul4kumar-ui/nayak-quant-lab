@@ -6,9 +6,11 @@ from pathlib import Path
 from typing import Any
 
 from quantlab import __version__
+from quantlab.app.chart_history import ChartDataSession
 from quantlab.app.commands import request_live_trading
 from quantlab.app.health import HealthReport, run_health_checks
 from quantlab.app.jobs import Job, JobService
+from quantlab.app.live_market import LiveMarketFeed
 from quantlab.app.log_buffer import LogBuffer
 from quantlab.app.mode import AppMode, resolve_mode
 from quantlab.app.paths import RuntimePaths
@@ -53,6 +55,8 @@ class ApplicationRuntime:
         self.risk_state = risk_state
         self.notifications: list[str] = []
         self._closed = False
+        self.live_market = LiveMarketFeed()
+        self.chart_data = ChartDataSession()
 
     @property
     def is_closed(self) -> bool:
@@ -107,6 +111,8 @@ class ApplicationRuntime:
         if self._closed:
             return
         self._closed = True
+        self.live_market.close()
+        self.chart_data.close()
         self.jobs.shutdown(wait=True)
         self.ui_settings.save()
         self.logs.flush()

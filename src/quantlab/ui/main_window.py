@@ -792,7 +792,7 @@ class MainWindow(QMainWindow):
             )
         else:
             self._safety_ribbon.setText(
-                "RESEARCH / SHADOW MODE · SIMULATED WORKFLOWS · "
+                "RESEARCH / SHADOW MODE · OBSERVE-ONLY MARKET DATA · "
                 "LIVE TRADING DISABLED · BROKER WRITE DISABLED"
             )
         self._mode_badge.setObjectName("modeBadgeLive" if live else "modeBadge")
@@ -1091,6 +1091,11 @@ class MainWindow(QMainWindow):
         self._paint_status()
 
     def _tick(self) -> None:
+        if self.runtime.is_closed:
+            self._timer.stop()
+            return
+        self.runtime.live_market.tick()
+        self.runtime.refresh_status()
         self.backtest.poll()
         self.validation.poll()
         self.test.poll()
@@ -1111,6 +1116,7 @@ class MainWindow(QMainWindow):
             status.live_trading,
             status.broker,
             status.system,
+            self.runtime.live_market.status,
             self._logs_has_error(),
         )
 

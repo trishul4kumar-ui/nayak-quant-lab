@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime
 
 from quantlab.core.config import LiveSafetyGates
 from quantlab.realtime_data.audit import append as record_audit
@@ -78,6 +78,43 @@ def _assert_safety() -> LiveSafetyGates:
     if gates.live_trading or gates.broker_write_enabled or not live_release_blocked():
         raise RealTimeDataError("observe-only feed refuses a live or write-enabled safety state")
     return gates
+
+
+def fetch_kite_snapshot() -> RealTimeSnapshot:
+    """One isolated GET-only capture for a desktop worker.
+
+    Never changes the CLI/demo adapter, uses cached observations, or falls back to
+    synthetic data. Display polling is ephemeral; explicit captures are persisted
+    separately so two-second refreshes cannot grow the snapshot/audit stores.
+    Re-read local credentials on each request to support daily token renewal.
+    """
+    _assert_safety()
+    adapter = KiteMarketDataAdapter.from_environment()
+    adapter.connect()
+    try:
+        rows = adapter.poll()
+        if not rows:
+            raise RealTimeDataError("Kite returned no observations; no synthetic fallback")
+        provenance = adapter.source_health()
+        frozen = freeze(
+            rows,
+            as_of=datetime.now(UTC),
+            provenance=provenance,
+            source_manifest="production-observe-only:" + "|".join(adapter.source_priority),
+        )
+        _assert_safety()
+        return frozen
+    finally:
+        adapter.disconnect()
+
+
+def save_observed_snapshot(frozen: RealTimeSnapshot) -> None:
+    """Explicitly retain an already fetched, immutable observe-only snapshot."""
+    _assert_safety()
+    if frozen.live_trading or any(row.live_trading for row in frozen.observations):
+        raise RealTimeDataError("cannot capture a trading-enabled observation")
+    put_snapshot(frozen)
+    record_audit("snapshot", snapshot_id=frozen.snapshot_id, hash=frozen.snapshot_hash)
 
 
 def start(

@@ -164,6 +164,7 @@ class KiteMarketDataAdapter(ProductionMarketDataAdapter):
         # Record that limitation explicitly so consumers never infer a sequence.
         payload["sequence_guarantee"] = "not_provided"
         payload["provider_faults"] = tuple(self._provider_faults)
+        payload["max_quote_age_seconds"] = self._config.max_quote_age_seconds
         raw_faults = payload.get("quality_faults")
         faults: tuple[str, ...] = (
             tuple(str(item) for item in raw_faults) if isinstance(raw_faults, tuple) else ()

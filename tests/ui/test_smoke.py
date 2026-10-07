@@ -210,7 +210,8 @@ def test_main_window_full_mode_nav(tmp_path: Path, qapp: QApplication) -> None:
     assert "LIVE DISABLED" in rt_data_badge
     assert "OBSERVE-ONLY" in rt_data_badge
     rt_data_actions = [btn.text() for btn in rt_data_page.findChildren(QPushButton)]
-    assert "RUN SNAPSHOT" in rt_data_actions
+    assert "Run synthetic demo" in rt_data_actions
+    assert "Capture Kite snapshot" in rt_data_actions
     assert not any(text == "LIVE" or text.startswith("SEND") for text in rt_data_actions)
     rt_decision_row = next(
         i for i in range(window.nav.count()) if _nav_labels(window)[i] == "Real-Time Decision Lab"

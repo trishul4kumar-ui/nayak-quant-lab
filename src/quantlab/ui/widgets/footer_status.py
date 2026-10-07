@@ -41,18 +41,23 @@ class _StatusChip(QFrame):
     ) -> None:
         super().__init__()
         self._nav_key = nav_key
-        tones = _chip_tones(theme)
-        bg, fg = tones.get(tone, tones["neutral"])
         if nav_key:
             self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._label = label
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(6, 2, 6, 2)
+        self._text = QLabel()
+        layout.addWidget(self._text)
+        self.update_value(value, tone=tone, theme=theme)
+
+    def update_value(self, value: str, *, tone: str, theme: UiTheme) -> None:
+        self._text.setText(f"{self._label}: {value}")
+        tones = _chip_tones(theme)
+        bg, fg = tones.get(tone, tones["neutral"])
         self.setStyleSheet(
             f"background: {bg}; color: {fg}; padding: 2px 8px; "
             "border-radius: 4px; font-size: 11px; font-weight: 600;"
         )
-        layout = QHBoxLayout(self)
-        layout.setContentsMargins(6, 2, 6, 2)
-        text = QLabel(f"{label}: {value}")
-        layout.addWidget(text)
 
     def mousePressEvent(self, event: QMouseEvent) -> None:
         if self._nav_key:
@@ -73,17 +78,13 @@ class FooterStatusBar(QStatusBar):
         self._layout = QHBoxLayout(self._host)
         self._layout.setContentsMargins(4, 0, 4, 0)
         self._layout.setSpacing(6)
+        self._chips: dict[str, _StatusChip] = {}
+        self._hint = QLabel("System · Data · Jobs → Home Pulse")
+        self._layout.addWidget(self._hint)
+        self._layout.addStretch()
         self.addWidget(self._host, 1)
 
     def update_from_runtime(self, runtime: ApplicationRuntime, *, mode_label: str) -> None:
-        while self._layout.count():
-            item = self._layout.takeAt(0)
-            if item is None:
-                break
-            widget = item.widget()
-            if widget is not None:
-                widget.deleteLater()
-
         status = runtime.status
         theme = runtime.ui_settings.current.theme
         hint_color = "#5c574f" if theme is UiTheme.LIGHT else "#6b7080"
@@ -101,13 +102,25 @@ class FooterStatusBar(QStatusBar):
                 status_tone("BROKER", status.broker),
                 "broker",
             ),
+            (
+                "KITE DATA",
+                runtime.live_market.status,
+                "ok" if runtime.live_market.status == "LIVE QUOTES" else "warn",
+                "market",
+            ),
         ]
         for label, value, tone, nav_key in chips:
-            chip = _StatusChip(label, value, tone=tone, nav_key=nav_key, theme=theme)
-            if nav_key:
-                chip.clicked.connect(self.chip_clicked.emit)
-            self._layout.addWidget(chip)
-        hint = QLabel("System · Data · Jobs → Home Pulse")
-        hint.setStyleSheet(f"color: {hint_color}; font-size: 11px;")
-        self._layout.addWidget(hint)
-        self._layout.addStretch()
+            chip = self._chips.get(label)
+            if chip is None:
+                chip = _StatusChip(label, value, tone=tone, nav_key=nav_key, theme=theme)
+                self._chips[label] = chip
+                if nav_key:
+                    chip.clicked.connect(self.chip_clicked.emit)
+                self._layout.insertWidget(len(self._chips) - 1, chip)
+            else:
+                chip.update_value(value, tone=tone, theme=theme)
+            if label == "BROKER":
+                chip.setToolTip("Broker account session, separate from Kite market-data access")
+            elif label == "KITE DATA":
+                chip.setToolTip("Kite quote feed only. Data connectivity never enables trading.")
+        self._hint.setStyleSheet(f"color: {hint_color}; font-size: 11px;")
