@@ -8,12 +8,14 @@ from typing import Any
 from pydantic import BaseModel
 
 from quantlab.core.errors import QuantLabError
+from quantlab.realtime_data.models import RealTimeSnapshot
 from quantlab.realtime_data.service import (
     audit_history,
     health,
     inspect,
     list_snapshots,
     replay,
+    save_observed_snapshot,
     snapshot,
     source_status,
     start,
@@ -79,6 +81,16 @@ def stop_payload() -> dict[str, Any]:
 
 def snapshot_payload() -> dict[str, Any]:
     frozen = snapshot()
+    return _snapshot_row(frozen)
+
+
+def record_snapshot_payload(frozen: RealTimeSnapshot) -> dict[str, Any]:
+    """Store a desktop capture explicitly; quote polling alone does not grow the ledger."""
+    save_observed_snapshot(frozen)
+    return _snapshot_row(frozen)
+
+
+def _snapshot_row(frozen: RealTimeSnapshot) -> dict[str, Any]:
     return _store(
         {
             "id": frozen.snapshot_id,

@@ -72,7 +72,12 @@ def main() -> None:
     parser = argparse.ArgumentParser(prog="quantlab")
     sub = parser.add_subparsers(dest="cmd", required=True)
     sub.add_parser("slice", help="run the Day-1 momentum vertical slice")
-    sub.add_parser("desktop", help="launch the QUANT LAB desktop application")
+    desktop_parser = sub.add_parser("desktop", help="launch the QUANT LAB desktop application")
+    desktop_parser.add_argument(
+        "--kite-quotes",
+        action="store_true",
+        help="open Market Lab and start observe-only Kite quote refresh (no orders)",
+    )
     add_data_parser(sub)
     add_agents_parser(sub)
     add_feature_parser(sub)
@@ -138,7 +143,7 @@ def main() -> None:
     elif args.cmd == "desktop":
         from quantlab.ui.main import main as desktop_main
 
-        raise SystemExit(desktop_main())
+        raise SystemExit(desktop_main(kite_quotes=args.kite_quotes))
     elif args.cmd == "data":
         raise SystemExit(run_data_command(args))
     elif args.cmd == "agents":
