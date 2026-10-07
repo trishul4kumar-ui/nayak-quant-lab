@@ -24,8 +24,8 @@ never replaced with synthetic evidence or a completion claim.
 | 40 Bull | Accepted | CI green for `6aa8651`; 1,482 local tests passed |
 | 41 Bear | Accepted | CI green for `794b880`; 1,499 local tests passed |
 | 42 Debate | Accepted | CI green for `167d8d4`; 1,517 local tests passed |
-| 43 Adjudication | In progress | Deterministic evidence policy and release checks |
-| 44 Levels | Pending | Deterministic evidence decision |
+| 43 Adjudication | Accepted | CI green for `99e506d` |
+| 44 Levels | In progress | Phase 44 focused tests and release checks |
 | 45 Candidates | Pending | Complete immutable upstream lineage |
 | 46 Console | Pending | Candidate lifecycle and responsive UI |
 | 47 Position review | Pending | Paper/shadow position contracts |
@@ -120,3 +120,13 @@ began after this acceptance. Phase 42's release checks then passed for `167d8d4`
 [CI run 37199102925](https://github.com/trishul4kumar-ui/nayak-quant-lab/actions/runs/37199102925).
 The exact local checkout passed **1,517 tests in 475.36 seconds**. Phase 43 began
 only after that cloud acceptance. Phase 44 remains pending its adjudication release gate.
+
+## Phase 43 acceptance and Phase 44 progression
+
+Phase 43's release gate passed for `99e506d` in
+[CI run 37609867338](https://github.com/trishul4kumar-ui/nayak-quant-lab/actions/runs/37609867338)
+on 2026-10-07. The metadata-only commit triggered the repository's existing
+push workflow without changing Phase 43 source files. The exact clean checkout
+also passed the complete local suite, focused adjudication tests, Ruff, strict
+mypy and optimized safety suite. Phase 44 then began. Its cloud acceptance is
+not claimed until its own change set passes CI; Phase 45 remains pending.
