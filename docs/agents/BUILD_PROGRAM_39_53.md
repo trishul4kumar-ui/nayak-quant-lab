@@ -34,7 +34,7 @@ never replaced with synthetic evidence or a completion claim.
 | 50 Intraday | In progress | Deterministic replay, cost/risk evidence, consolidated verification |
 | 51 Paper | In progress | Candidate lineage through canonical Paper OMS |
 | 52 Production shadow | In progress | Sustained real observations and zero-write evidence |
-| 53 Human execution | Blocked | All prior gates, sustained shadow, certified authorization, secure gateway deployment |
+| 53 Human execution | Implemented — evidence dossier only; live blocked | All prior gates, sustained shadow, certified authorization, secure gateway deployment |
 
 Local checks are evidence for this checkout only. GitHub CI is not reported as green
 for unpublished changes. No commit, push, live broker submission, or remote deployment
