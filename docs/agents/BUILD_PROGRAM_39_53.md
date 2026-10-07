@@ -31,9 +31,9 @@ never replaced with synthetic evidence or a completion claim.
 | 47 Position review | Accepted | CI green for `20192f7` |
 | 48 Calibration | Accepted | CI green for `20192f7` |
 | 49 Daily desk | In progress | Consolidated local verification and CI after Phase 45–48 acceptance |
-| 50 Intraday | Pending | Replayable ticks and depth; deterministic cost/risk path |
-| 51 Paper | Pending | Canonical paper OMS integration |
-| 52 Production shadow | Pending | Sustained real observations and restart evidence |
+| 50 Intraday | In progress | Deterministic replay, cost/risk evidence, consolidated verification |
+| 51 Paper | In progress | Candidate lineage through canonical Paper OMS |
+| 52 Production shadow | In progress | Sustained real observations and zero-write evidence |
 | 53 Human execution | Blocked | All prior gates, sustained shadow, certified authorization, secure gateway deployment |
 
 Local checks are evidence for this checkout only. GitHub CI is not reported as green
