@@ -53,10 +53,12 @@ from quantlab.ai.permissions import DENIED_CAPABILITIES
 from quantlab.app.bootstrap import ApplicationRuntime
 from quantlab.app.jobs import Job, JobStatus
 from quantlab.realtime_data.service import inspect as inspect_snapshot
+from quantlab.trade_levels.models import ExitPolicy, TradeLevelPlan
 from quantlab.ui.widgets.adjudication_workspace import AdjudicationWorkspace
 from quantlab.ui.widgets.agent_desk_webview import AgentDeskWebView
 from quantlab.ui.widgets.analyst_workspace import AnalystWorkspace
 from quantlab.ui.widgets.lab_shell import LabPageShell
+from quantlab.ui.widgets.trade_level_workspace import TradeLevelWorkspace
 
 
 class AiQuantDeskPage(LabPageShell):
@@ -132,6 +134,10 @@ class AiQuantDeskPage(LabPageShell):
         self._adjudication.run_button.clicked.connect(self._run_adjudication)
         self._adjudication.history.currentIndexChanged.connect(self._choose_adjudication)
         self._tabs.addTab(self._adjudication, "Adjudication")
+        self._levels = TradeLevelWorkspace()
+        self._levels.history.currentIndexChanged.connect(self._choose_level_plan)
+        self._selected_level_plan: str | None = None
+        self._tabs.addTab(self._levels, "Levels")
         for name in ("Permissions", "Tools", "Audit"):
             inspector = QTextBrowser()
             inspector.setOpenExternalLinks(False)
@@ -395,6 +401,39 @@ class AiQuantDeskPage(LabPageShell):
         if isinstance(identity, str):
             self._selected_decision = identity
             self.refresh()
+
+    def _choose_level_plan(self, _: int) -> None:
+        identity = self._levels.history.currentData()
+        if isinstance(identity, str):
+            self._selected_level_plan = identity
+            self.refresh()
+
+    def _refresh_levels(self, repository: AgentRepository) -> None:
+        plans = repository.list(TradeLevelPlan)[-100:]
+        self._levels.history.blockSignals(True)
+        self._levels.history.clear()
+        for plan in plans:
+            self._levels.history.addItem(
+                f"{plan.status} · {plan.security_id} · {plan.content_hash[:8]}", plan.content_hash
+            )
+        selected = next(
+            (plan for plan in plans if plan.content_hash == self._selected_level_plan),
+            plans[-1] if plans else None,
+        )
+        if selected:
+            self._levels.history.setCurrentIndex(self._levels.history.findData(selected.content_hash))
+            exit_policy = (
+                repository.get(selected.exit_policy_hash, ExitPolicy)
+                if selected.exit_policy_hash
+                else None
+            )
+            self._levels.display(selected, exit_policy)
+        else:
+            self._levels.summary.setText(
+                "No frozen level plan · missing data remains a blocker · NO EXECUTION AUTHORITY"
+            )
+            self._levels.details.clear()
+        self._levels.history.blockSignals(False)
 
     def _refresh_adjudication(
         self, repository: AgentRepository, transcript: DebateTranscript | None
@@ -703,6 +742,7 @@ class AiQuantDeskPage(LabPageShell):
                             for state in states
                         ]
                 decision_dto = self._refresh_adjudication(repository, selected)
+                self._refresh_levels(repository)
                 self._visual.bridge.publish(
                     tuple(states), tuple(evidence[:40]), debate_dto, decision_dto
                 )
@@ -721,6 +761,10 @@ class AiQuantDeskPage(LabPageShell):
             self._adjudication.history.blockSignals(True)
             self._adjudication.history.clear()
             self._adjudication.history.blockSignals(False)
+            self._levels.history.blockSignals(True)
+            self._levels.history.clear()
+            self._levels.history.blockSignals(False)
+            self._levels.details.clear()
             for inspector in self._inspectors.values():
                 inspector.setPlainText("Persistence unavailable. Research runs are blocked.")
             self._visual.bridge.publish(
