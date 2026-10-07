@@ -25,11 +25,11 @@ never replaced with synthetic evidence or a completion claim.
 | 41 Bear | Accepted | CI green for `794b880`; 1,499 local tests passed |
 | 42 Debate | Accepted | CI green for `167d8d4`; 1,517 local tests passed |
 | 43 Adjudication | Accepted | CI green for `99e506d` |
-| 44 Levels | In progress | Phase 44 focused tests and release checks |
-| 45 Candidates | Pending | Complete immutable upstream lineage |
-| 46 Console | Pending | Candidate lifecycle and responsive UI |
-| 47 Position review | Pending | Paper/shadow position contracts |
-| 48 Calibration | Pending | Time-bound outcome records |
+| 44 Levels | Accepted | CI green for `960b7af` |
+| 45 Candidates | In progress | Consolidated 45–48 local verification and CI |
+| 46 Console | In progress | Consolidated 45–48 local verification and CI |
+| 47 Position review | In progress | Consolidated 45–48 local verification and CI |
+| 48 Calibration | In progress | Consolidated 45–48 local verification and CI |
 | 49 Daily desk | Pending | Prior phases and source-backed exchange sessions |
 | 50 Intraday | Pending | Replayable ticks and depth; deterministic cost/risk path |
 | 51 Paper | Pending | Canonical paper OMS integration |
@@ -120,6 +120,17 @@ began after this acceptance. Phase 42's release checks then passed for `167d8d4`
 [CI run 37199102925](https://github.com/trishul4kumar-ui/nayak-quant-lab/actions/runs/37199102925).
 The exact local checkout passed **1,517 tests in 475.36 seconds**. Phase 43 began
 only after that cloud acceptance. Phase 44 remains pending its adjudication release gate.
+
+## Phase 44 acceptance and 45–48 local batch
+
+Phase 44 passed its cloud release gate for `960b7af` in
+[CI run 37613631593](https://github.com/trishul4kumar-ui/nayak-quant-lab/actions/runs/37613631593)
+on 2026-10-07. The agreed implementation workflow now batches the dependent
+research-only Phases 45–48 in one local change set, with focused checks during
+implementation and a single consolidated local/CI release gate at the end.
+This reduces publication overhead but does not waive any evidence gate. Until that
+future gate is green, Phases 45–48 remain in progress and cannot support Phase 49
+or any order-routing capability.
 
 ## Phase 43 acceptance and Phase 44 progression
 

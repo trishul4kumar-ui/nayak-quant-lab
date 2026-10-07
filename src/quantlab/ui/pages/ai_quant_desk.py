@@ -21,6 +21,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from quantlab.agent_calibration.models import AgentScorecard
 from quantlab.agents.adjudication_contracts import AdjudicationDecision, FrozenAdjudicationInput
 from quantlab.agents.adjudication_service import run_adjudication, verify_adjudication
 from quantlab.agents.bear import BearWorker, bear_mandate, create_bear_context, search_bear_history
@@ -52,13 +53,19 @@ from quantlab.agents.tool_gateway import AgentToolGateway
 from quantlab.ai.permissions import DENIED_CAPABILITIES
 from quantlab.app.bootstrap import ApplicationRuntime
 from quantlab.app.jobs import Job, JobStatus
+from quantlab.position_intelligence.models import PositionAssessment
 from quantlab.realtime_data.service import inspect as inspect_snapshot
+from quantlab.trade_candidates.models import TradeCandidatePacket
 from quantlab.trade_levels.models import ExitPolicy, TradeLevelPlan
 from quantlab.ui.widgets.adjudication_workspace import AdjudicationWorkspace
 from quantlab.ui.widgets.agent_desk_webview import AgentDeskWebView
+from quantlab.ui.widgets.agent_performance_workspace import AgentPerformanceWorkspace
 from quantlab.ui.widgets.analyst_workspace import AnalystWorkspace
 from quantlab.ui.widgets.lab_shell import LabPageShell
+from quantlab.ui.widgets.position_review_workspace import PositionReviewWorkspace
+from quantlab.ui.widgets.trade_decision_console import TradeDecisionConsole
 from quantlab.ui.widgets.trade_level_workspace import TradeLevelWorkspace
+from quantlab.ui.widgets.trade_queue_workspace import TradeQueueWorkspace
 
 
 class AiQuantDeskPage(LabPageShell):
@@ -138,6 +145,14 @@ class AiQuantDeskPage(LabPageShell):
         self._levels.history.currentIndexChanged.connect(self._choose_level_plan)
         self._selected_level_plan: str | None = None
         self._tabs.addTab(self._levels, "Levels")
+        self._queue = TradeQueueWorkspace()
+        self._queue.table.cellDoubleClicked.connect(self._open_candidate_console)
+        self._tabs.addTab(self._queue, "Trade Queue")
+        self._positions = PositionReviewWorkspace()
+        self._positions.reviewAction.connect(self._audit_position_review_action)
+        self._tabs.addTab(self._positions, "Position Intelligence")
+        self._performance = AgentPerformanceWorkspace()
+        self._tabs.addTab(self._performance, "Agent Performance")
         for name in ("Permissions", "Tools", "Audit"):
             inspector = QTextBrowser()
             inspector.setOpenExternalLinks(False)
@@ -407,6 +422,65 @@ class AiQuantDeskPage(LabPageShell):
         if isinstance(identity, str):
             self._selected_level_plan = identity
             self.refresh()
+
+    def _open_candidate_console(self, row: int, _: int) -> None:
+        item = self._queue.table.item(row, 0)
+        candidate_hash = item.data(256) if item else None
+        if not isinstance(candidate_hash, str):
+            return
+        repository: AgentRepository | None = None
+        try:
+            repository = AgentRepository(self._repo_path)
+            candidate = repository.get(candidate_hash, TradeCandidatePacket)
+            plan = repository.get(candidate.level_plan_hash, TradeLevelPlan)
+            exit_policy = (
+                repository.get(plan.exit_policy_hash, ExitPolicy) if plan.exit_policy_hash else None
+            )
+            dialog = TradeDecisionConsole(candidate, plan, exit_policy, self)
+            dialog.candidateAction.connect(
+                lambda action, _label: repository.audit(
+                    f"CANDIDATE_CONSOLE_{action}",
+                    run_id=candidate.candidate_id,
+                    now=datetime.now(UTC),
+                    artifact_hash=candidate.content_hash,
+                    safe_code="NO_EXECUTION_AUTHORITY",
+                )
+            )
+            repository.audit(
+                "CANDIDATE_CONSOLE_OPENED",
+                run_id=candidate.candidate_id,
+                now=datetime.now(UTC),
+                artifact_hash=candidate.content_hash,
+                safe_code="NO_EXECUTION_AUTHORITY",
+            )
+            dialog.exec()
+        except (OSError, RuntimeError, ValueError, KeyError):
+            self._queue.summary.setText(
+                "Candidate console blocked; immutable lineage could not be verified."
+            )
+        finally:
+            if repository:
+                repository.close()
+
+    def _audit_position_review_action(self, action: str, assessment_hash: str) -> None:
+        repository: AgentRepository | None = None
+        try:
+            repository = AgentRepository(self._repo_path)
+            assessment = repository.get(assessment_hash, PositionAssessment)
+            repository.audit(
+                f"POSITION_REVIEW_{action}",
+                run_id=assessment.position_id,
+                now=datetime.now(UTC),
+                artifact_hash=assessment.content_hash,
+                safe_code="RESEARCH_PROPOSAL_ONLY",
+            )
+        except (OSError, RuntimeError, ValueError, KeyError):
+            self._positions.summary.setText(
+                "Review request blocked; immutable history unavailable."
+            )
+        finally:
+            if repository:
+                repository.close()
 
     def _refresh_levels(self, repository: AgentRepository) -> None:
         plans = repository.list(TradeLevelPlan)[-100:]
@@ -743,6 +817,9 @@ class AiQuantDeskPage(LabPageShell):
                         ]
                 decision_dto = self._refresh_adjudication(repository, selected)
                 self._refresh_levels(repository)
+                self._queue.set_candidates(repository.list(TradeCandidatePacket)[-200:])
+                self._positions.set_assessments(repository.list(PositionAssessment)[-200:])
+                self._performance.set_scorecards(repository.list(AgentScorecard)[-200:])
                 self._visual.bridge.publish(
                     tuple(states), tuple(evidence[:40]), debate_dto, decision_dto
                 )
@@ -765,6 +842,9 @@ class AiQuantDeskPage(LabPageShell):
             self._levels.history.clear()
             self._levels.history.blockSignals(False)
             self._levels.details.clear()
+            self._queue.set_candidates(())
+            self._positions.set_assessments(())
+            self._performance.set_scorecards(())
             for inspector in self._inspectors.values():
                 inspector.setPlainText("Persistence unavailable. Research runs are blocked.")
             self._visual.bridge.publish(

@@ -66,6 +66,7 @@ from quantlab.risk.cli import add_risk_parser, run_risk_command
 from quantlab.safety.cli import add_safety_parser, run_safety_command
 from quantlab.shadow.cli import add_shadow_parser, run_shadow_command
 from quantlab.tca.cli import add_tca_parser, run_tca_command
+from quantlab.trade_candidates.cli import add_candidates_parser, run_candidates_command
 from quantlab.trade_levels.cli import add_trade_levels_parser, run_trade_levels_command
 
 
@@ -76,6 +77,7 @@ def main() -> None:
     sub.add_parser("desktop", help="launch the QUANT LAB desktop application")
     add_data_parser(sub)
     add_agents_parser(sub)
+    add_candidates_parser(sub)
     add_trade_levels_parser(sub)
     add_feature_parser(sub)
     add_alpha_parser(sub)
@@ -145,6 +147,8 @@ def main() -> None:
         raise SystemExit(run_data_command(args))
     elif args.cmd == "agents":
         raise SystemExit(run_agents_command(args))
+    elif args.cmd == "candidates":
+        raise SystemExit(run_candidates_command(args))
     elif args.cmd == "trade-levels":
         raise SystemExit(run_trade_levels_command(args))
     elif args.cmd == "feature":
