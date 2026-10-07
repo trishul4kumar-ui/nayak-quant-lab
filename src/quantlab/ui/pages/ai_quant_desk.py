@@ -22,6 +22,9 @@ from PySide6.QtWidgets import (
 )
 
 from quantlab.agent_calibration.models import AgentScorecard
+from quantlab.agent_desk.models import DailyDeskState
+from quantlab.agent_desk.repository import DailyDeskRepository
+from quantlab.agent_desk.service import DailyDeskService
 from quantlab.agents.adjudication_contracts import AdjudicationDecision, FrozenAdjudicationInput
 from quantlab.agents.adjudication_service import run_adjudication, verify_adjudication
 from quantlab.agents.bear import BearWorker, bear_mandate, create_bear_context, search_bear_history
@@ -61,6 +64,7 @@ from quantlab.ui.widgets.adjudication_workspace import AdjudicationWorkspace
 from quantlab.ui.widgets.agent_desk_webview import AgentDeskWebView
 from quantlab.ui.widgets.agent_performance_workspace import AgentPerformanceWorkspace
 from quantlab.ui.widgets.analyst_workspace import AnalystWorkspace
+from quantlab.ui.widgets.daily_desk_workspace import DailyDeskWorkspace
 from quantlab.ui.widgets.lab_shell import LabPageShell
 from quantlab.ui.widgets.position_review_workspace import PositionReviewWorkspace
 from quantlab.ui.widgets.trade_decision_console import TradeDecisionConsole
@@ -153,6 +157,9 @@ class AiQuantDeskPage(LabPageShell):
         self._tabs.addTab(self._positions, "Position Intelligence")
         self._performance = AgentPerformanceWorkspace()
         self._tabs.addTab(self._performance, "Agent Performance")
+        self._daily_desk = DailyDeskWorkspace()
+        self._daily_desk.pauseRequested.connect(self._pause_daily_research)
+        self._tabs.addTab(self._daily_desk, "Daily Desk")
         for name in ("Permissions", "Tools", "Audit"):
             inspector = QTextBrowser()
             inspector.setOpenExternalLinks(False)
@@ -477,6 +484,25 @@ class AiQuantDeskPage(LabPageShell):
         except (OSError, RuntimeError, ValueError, KeyError):
             self._positions.summary.setText(
                 "Review request blocked; immutable history unavailable."
+            )
+        finally:
+            if repository:
+                repository.close()
+
+    def _pause_daily_research(self) -> None:
+        repository: DailyDeskRepository | None = None
+        try:
+            repository = DailyDeskRepository(self._repo_path)
+            states = repository.states()
+            if not states:
+                self._daily_desk.summary.setText("No persisted daily desk state to pause.")
+                return
+            latest = max(states, key=lambda item: item.created_at)
+            DailyDeskService(repository).pause(latest.desk_id, now=datetime.now(UTC))
+            self.refresh()
+        except (OSError, RuntimeError, ValueError, KeyError):
+            self._daily_desk.summary.setText(
+                "Daily-research pause blocked; state could not be verified."
             )
         finally:
             if repository:
@@ -820,6 +846,10 @@ class AiQuantDeskPage(LabPageShell):
                 self._queue.set_candidates(repository.list(TradeCandidatePacket)[-200:])
                 self._positions.set_assessments(repository.list(PositionAssessment)[-200:])
                 self._performance.set_scorecards(repository.list(AgentScorecard)[-200:])
+                desk_states = repository.list(DailyDeskState)
+                self._daily_desk.set_state(
+                    max(desk_states, key=lambda item: item.created_at) if desk_states else None
+                )
                 self._visual.bridge.publish(
                     tuple(states), tuple(evidence[:40]), debate_dto, decision_dto
                 )
@@ -845,6 +875,7 @@ class AiQuantDeskPage(LabPageShell):
             self._queue.set_candidates(())
             self._positions.set_assessments(())
             self._performance.set_scorecards(())
+            self._daily_desk.set_state(None)
             for inspector in self._inspectors.values():
                 inspector.setPlainText("Persistence unavailable. Research runs are blocked.")
             self._visual.bridge.publish(

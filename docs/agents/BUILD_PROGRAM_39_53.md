@@ -26,11 +26,11 @@ never replaced with synthetic evidence or a completion claim.
 | 42 Debate | Accepted | CI green for `167d8d4`; 1,517 local tests passed |
 | 43 Adjudication | Accepted | CI green for `99e506d` |
 | 44 Levels | Accepted | CI green for `960b7af` |
-| 45 Candidates | In progress | Consolidated 45–48 local verification and CI |
-| 46 Console | In progress | Consolidated 45–48 local verification and CI |
-| 47 Position review | In progress | Consolidated 45–48 local verification and CI |
-| 48 Calibration | In progress | Consolidated 45–48 local verification and CI |
-| 49 Daily desk | Pending | Prior phases and source-backed exchange sessions |
+| 45 Candidates | Accepted | CI green for `20192f7` |
+| 46 Console | Accepted | CI green for `20192f7` |
+| 47 Position review | Accepted | CI green for `20192f7` |
+| 48 Calibration | Accepted | CI green for `20192f7` |
+| 49 Daily desk | In progress | Consolidated local verification and CI after Phase 45–48 acceptance |
 | 50 Intraday | Pending | Replayable ticks and depth; deterministic cost/risk path |
 | 51 Paper | Pending | Canonical paper OMS integration |
 | 52 Production shadow | Pending | Sustained real observations and restart evidence |
@@ -131,6 +131,15 @@ implementation and a single consolidated local/CI release gate at the end.
 This reduces publication overhead but does not waive any evidence gate. Until that
 future gate is green, Phases 45–48 remain in progress and cannot support Phase 49
 or any order-routing capability.
+
+## Phase 45–48 acceptance and Phase 49 progression
+
+The batched Phase 45–48 change set passed its cloud release gate for `20192f7` in
+[CI run 37668583689](https://github.com/trishul4kumar-ui/nayak-quant-lab/actions/runs/37668583689)
+on 2026-10-08. The run passed visual build, Ruff, strict mypy, secret-pattern scan,
+optimized safety coverage, the complete coverage suite, and distribution build. Phase
+49 may now proceed as a research/paper-only orchestration phase; it inherits all prior
+fail-closed and human-execution boundaries.
 
 ## Phase 43 acceptance and Phase 44 progression
 

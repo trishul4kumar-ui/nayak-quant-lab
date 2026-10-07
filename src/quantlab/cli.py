@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 
 from quantlab.adaptive.cli import add_adaptive_parser, run_adaptive_command
+from quantlab.agent_desk.cli import add_agent_desk_parser, run_agent_desk_command
 from quantlab.agents.cli import add_agents_parser, run_agents_command
 from quantlab.alpha.cli import add_alpha_parser, run_alpha_command
 from quantlab.broker_gateway.cli import add_broker_parser, run_broker_command
@@ -77,6 +78,7 @@ def main() -> None:
     sub.add_parser("desktop", help="launch the QUANT LAB desktop application")
     add_data_parser(sub)
     add_agents_parser(sub)
+    add_agent_desk_parser(sub)
     add_candidates_parser(sub)
     add_trade_levels_parser(sub)
     add_feature_parser(sub)
@@ -147,6 +149,8 @@ def main() -> None:
         raise SystemExit(run_data_command(args))
     elif args.cmd == "agents":
         raise SystemExit(run_agents_command(args))
+    elif args.cmd == "daily-desk":
+        raise SystemExit(run_agent_desk_command(args))
     elif args.cmd == "candidates":
         raise SystemExit(run_candidates_command(args))
     elif args.cmd == "trade-levels":
