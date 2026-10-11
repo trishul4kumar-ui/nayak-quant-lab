@@ -18,6 +18,16 @@ from quantlab.agents.presentation import (
 )
 
 
+def visual_layer_enabled() -> bool:
+    """Enable the local visual desk by default; allow an explicit native-only opt-out."""
+    return os.environ.get("QUANT_LAB_AGENT_VISUALS", "1").strip().lower() not in {
+        "0",
+        "false",
+        "no",
+        "off",
+    }
+
+
 class AgentDeskBridge(QObject):
     presentationChanged = Signal(str)
     navigationRequested = Signal(str, str)
@@ -85,7 +95,7 @@ class AgentDeskWebView(QWidget):
         layout.addWidget(self.fallback)
         asset = Path(__file__).parents[1] / "web" / "agent_desk" / "dist" / "index.html"
         if (
-            os.environ.get("QUANT_LAB_AGENT_VISUALS") != "1"
+            not visual_layer_enabled()
             or not asset.is_file()
             or os.environ.get("QT_QPA_PLATFORM") == "offscreen"
         ):

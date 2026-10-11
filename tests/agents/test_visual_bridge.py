@@ -12,12 +12,27 @@ from quantlab.agents.presentation import (
     EvidenceEdgeDTO,
     EvidenceNodeSummaryDTO,
 )
-from quantlab.ui.widgets.agent_desk_webview import AgentDeskWebView
+from quantlab.ui.widgets.agent_desk_webview import AgentDeskWebView, visual_layer_enabled
 
 
 @pytest.fixture
 def qapp() -> QApplication:
     return QApplication.instance() or QApplication([])
+
+
+@pytest.fixture(autouse=True)
+def native_only_visuals(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Bridge tests exercise the deterministic native fallback, not Chromium."""
+    monkeypatch.setenv("QUANT_LAB_AGENT_VISUALS", "0")
+
+
+def test_visual_layer_defaults_on_and_allows_explicit_opt_out(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("QUANT_LAB_AGENT_VISUALS", raising=False)
+    assert visual_layer_enabled()
+    monkeypatch.setenv("QUANT_LAB_AGENT_VISUALS", "false")
+    assert not visual_layer_enabled()
 
 
 def test_native_fallback_and_bridge_only_navigates(qapp: QApplication) -> None:

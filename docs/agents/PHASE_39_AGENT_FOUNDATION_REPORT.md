@@ -36,13 +36,14 @@ BUILD_PROGRAM_39_53.md. No production or profitability claim is made.
 ```sh
 cd "/Users/vaibhavkumarn/Desktop/NAYAK QUANT LAB"
 source .venv/bin/activate
-QUANT_LAB_AGENT_VISUALS=1 python -m quantlab.ui.main
+python -m quantlab.ui.main
 ```
 
 Choose **Full Lab → Research → AI Quant Desk**. Analyst states are IDLE until the
 later phases implement workers; unavailable provider/analysis status is intentional.
-Omit `QUANT_LAB_AGENT_VISUALS=1` for native-only inspectors. Model configuration is
-not needed to view permissions, tools, audit, or the foundation page.
+The local visual layer is enabled by default. Set `QUANT_LAB_AGENT_VISUALS=0` only
+when you intentionally want native-only inspectors. Model configuration is not needed
+to view permissions, tools, audit, or the foundation page.
 
 Official documentation checked at implementation time:
 

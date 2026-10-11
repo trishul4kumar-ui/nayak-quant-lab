@@ -35,10 +35,11 @@ def _run_desktop(argv: list[str] | None, *, kite_quotes: bool = False) -> int:
     from quantlab.ui.splash import SplashDialog
     from quantlab.ui.theme import apply_theme
     from quantlab.ui.welcome import WelcomeDialog
+    from quantlab.ui.widgets.agent_desk_webview import visual_layer_enabled
 
     data_env = os.environ.get("QUANT_LAB_DATA_DIR")
     runtime = bootstrap(data_dir=Path(data_env) if data_env else None)
-    if os.environ.get("QUANT_LAB_AGENT_VISUALS") == "1":
+    if visual_layer_enabled():
         QCoreApplication.setAttribute(Qt.ApplicationAttribute.AA_ShareOpenGLContexts)
     app = QApplication(argv if argv is not None else sys.argv)
     app.setApplicationName("NAYAK QUANT LAB")
