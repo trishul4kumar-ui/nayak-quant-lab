@@ -391,6 +391,15 @@ class ProviderRunner:
                     else self.provider.generate_structured
                 )
                 result.put(fn(request))
+            except AgentProviderError as exc:
+                # Preserve only the explicit transport timeout needed by the
+                # local desk's deterministic abstention path.  Other provider
+                # failures remain opaque at this boundary, including a busy
+                # transport that could otherwise disclose concurrent activity.
+                if str(exc) == "PROVIDER_TIMEOUT":
+                    result.put(exc)
+                else:
+                    result.put(AgentProviderError("PROVIDER_FAILED"))
             except Exception:
                 result.put(AgentProviderError("PROVIDER_FAILED"))
             finally:
