@@ -111,6 +111,7 @@ def test_explicit_ollama_configuration_never_needs_openai_credentials(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv("QUANT_LAB_AGENT_PROVIDER", "ollama")
+    monkeypatch.setenv("QUANT_LAB_OLLAMA_MODEL", "qwen3:4b")
     monkeypatch.setenv("OPENAI_API_KEY", "unused-cloud-fixture")
     monkeypatch.setenv("QUANT_LAB_AGENT_MODEL", "unused-cloud-model")
     provider = configured_provider()

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
@@ -18,6 +18,8 @@ from quantlab.ui.widgets.lab_shell import LabPageShell
 
 
 class AiResearchPage(LabPageShell):
+    openDeskRequested = Signal()
+
     def __init__(self, runtime: ApplicationRuntime) -> None:
         super().__init__(
             "AI Research",
@@ -32,6 +34,10 @@ class AiResearchPage(LabPageShell):
 
         self._status = QLabel()
         self.add_toolbar_widget(self._status)
+        desk = QPushButton("Open NAYAK institutional desk →")
+        desk.clicked.connect(self.openDeskRequested.emit)
+        desk.setToolTip("Ask your local AI desk about its frozen agent reports")
+        self.add_toolbar_widget(desk)
 
         self._scroll = QScrollArea()
         self._scroll.setObjectName("pageScroll")

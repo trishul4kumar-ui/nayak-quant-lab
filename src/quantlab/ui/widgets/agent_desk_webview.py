@@ -51,6 +51,7 @@ class AgentDeskBridge(QObject):
         evidence: tuple[EvidenceNodeSummaryDTO, ...],
         debate: DebateVisualDTO | None = None,
         adjudication: AdjudicationVisualDTO | None = None,
+        institution: dict[str, object] | None = None,
     ) -> None:
         self._evidence = frozenset(row.artifact_hash for row in evidence)
         self._transcript = debate.transcript_hash if debate else None
@@ -61,6 +62,7 @@ class AgentDeskBridge(QObject):
                 "evidence": [row.model_dump(mode="json") for row in evidence],
                 "debate": debate.model_dump(mode="json") if debate else None,
                 "adjudication": adjudication.model_dump(mode="json") if adjudication else None,
+                "institution": institution,
                 "safety": SystemSafetyDTO().model_dump(mode="json"),
             }
         )
@@ -70,6 +72,21 @@ class AgentDeskBridge(QObject):
     def navigate(self, intent: str, identity: str) -> None:
         allowed = (
             (intent == "select_agent" and identity in {"BULL", "BEAR"})
+            or (
+                intent == "select_role"
+                and identity
+                in {
+                    "NAYAK",
+                    "SUPERVISOR",
+                    "BULL",
+                    "BEAR",
+                    "NEWS_DOCS",
+                    "QUANT",
+                    "RISK",
+                    "EXECUTION_MONITOR",
+                    "AUDIT",
+                }
+            )
             or (intent == "open_evidence" and identity in self._evidence)
             or (intent == "open_debate" and identity == self._transcript and bool(identity))
             or (intent == "open_adjudication" and identity == self._decision and bool(identity))
@@ -79,7 +96,7 @@ class AgentDeskBridge(QObject):
 
 
 class AgentDeskWebView(QWidget):
-    """WebEngine is lazy/opt-in; headless and native controls work without Chromium."""
+    """Local visuals are default-on; headless/native controls work without Chromium."""
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -137,7 +154,7 @@ class AgentDeskWebView(QWidget):
                     ).resolve().is_relative_to(asset_root)
 
             web = QWebEngineView(self)
-            web.setMinimumHeight(380)
+            web.setMinimumHeight(660)
             # The view/page must be deleted before its profile, not as its sibling
             # under the view. QObject destroys children in their creation order.
             profile = QWebEngineProfile(self)
