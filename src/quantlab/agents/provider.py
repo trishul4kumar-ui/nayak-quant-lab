@@ -10,7 +10,8 @@ import urllib.error
 import urllib.request
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import Any, Protocol, TypeVar
+from typing import Any, Literal, Protocol, TypeVar
+from urllib.parse import urlsplit, urlunsplit
 
 from pydantic import BaseModel, ConfigDict, SecretStr, ValidationError
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -180,15 +181,140 @@ class OpenAIResponsesProvider:
         return self.generate_structured(request)
 
 
+class OllamaProvider:
+    """Localhost-only Ollama chat transport for bounded structured research output."""
+
+    _LOCAL_HOSTS = frozenset({"127.0.0.1", "::1", "localhost"})
+
+    def __init__(self, model: str = "qwen3:4b", host: str = "http://127.0.0.1:11434") -> None:
+        if not model or len(model) > 128 or any(char.isspace() for char in model):
+            raise ValueError("invalid local Ollama model name")
+        self._model = model
+        self._chat_endpoint = self._chat_url(host)
+        self._identity = AgentModelIdentity(
+            created_at=datetime(2026, 10, 8, tzinfo=UTC),
+            provider="ollama-local",
+            model=model,
+            version="ollama-chat-json-schema-v1",
+        )
+        self._observed_status = "NOT_TESTED"
+        self._transport_slot = threading.BoundedSemaphore(1)
+
+    @classmethod
+    def _chat_url(cls, host: str) -> str:
+        """Permit only a bare loopback Ollama host; never a user-supplied remote URL."""
+        parsed = urlsplit(host)
+        try:
+            port = parsed.port
+        except ValueError as exc:
+            raise ValueError("invalid local Ollama host port") from exc
+        hostname = (parsed.hostname or "").lower()
+        if (
+            parsed.scheme not in {"http", "https"}
+            or hostname not in cls._LOCAL_HOSTS
+            or parsed.username is not None
+            or parsed.password is not None
+            or parsed.path not in {"", "/"}
+            or parsed.query
+            or parsed.fragment
+            or port is None
+        ):
+            raise ValueError("Ollama host must be an explicit loopback host and port")
+        return urlunsplit((parsed.scheme, parsed.netloc, "/api/chat", "", ""))
+
+    def identity(self) -> AgentModelIdentity:
+        return self._identity
+
+    def health(self) -> ProviderHealth:
+        return ProviderHealth(
+            provider=self._identity.provider,
+            model=self._model,
+            configured=True,
+            observed_status=self._observed_status,
+        )
+
+    def generate_structured(self, request: StructuredRequest) -> str:
+        if not self._transport_slot.acquire(blocking=False):
+            raise AgentProviderError("PROVIDER_BUSY")
+        try:
+            return self._generate(request)
+        finally:
+            self._transport_slot.release()
+
+    def continue_structured(self, request: StructuredRequest) -> str:
+        # Stateless continuation preserves the existing frozen-evidence boundary.
+        return self.generate_structured(request)
+
+    def _generate(self, request: StructuredRequest) -> str:
+        if not request.sections:
+            raise AgentProviderError("INVALID_PROVIDER_REQUEST")
+        try:
+            schema = strict_schema(json.loads(request.schema_json))
+        except (TypeError, ValueError):
+            raise AgentProviderError("INVALID_PROVIDER_SCHEMA") from None
+        payload = {
+            "model": self._model,
+            "stream": False,
+            "think": False,
+            "messages": [
+                {"role": "system", "content": request.sections[0][1]},
+                {
+                    "role": "user",
+                    "content": json.dumps(dict(request.sections[1:]), sort_keys=True),
+                },
+            ],
+            "format": schema,
+            "options": {"temperature": 0, "num_predict": request.max_output_tokens},
+        }
+        req = urllib.request.Request(
+            self._chat_endpoint,
+            data=json.dumps(payload).encode(),
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=request.timeout_seconds) as response:
+                raw = response.read(1_000_001)
+            if len(raw) > 1_000_000:
+                raise AgentProviderError("PROVIDER_RESPONSE_TOO_LARGE")
+            body = json.loads(raw)
+            if not isinstance(body, dict) or body.get("done") is not True:
+                raise AgentProviderError("PROVIDER_INCOMPLETE")
+            message = body.get("message")
+            if body.get("refusal") is True or (
+                isinstance(message, dict) and message.get("refusal") is True
+            ):
+                self._observed_status = "REFUSED"
+                raise AgentProviderError("PROVIDER_REFUSED")
+            if not isinstance(message, dict) or message.get("role") != "assistant":
+                raise AgentProviderError("PROVIDER_INVALID_RESPONSE")
+            content = message.get("content")
+            if not isinstance(content, str) or not content.strip():
+                raise AgentProviderError("PROVIDER_INVALID_RESPONSE")
+            self._observed_status = "RESPONDED"
+            return content
+        except AgentProviderError:
+            raise
+        except (urllib.error.URLError, TimeoutError, ValueError, TypeError):
+            self._observed_status = "UNAVAILABLE"
+            raise AgentProviderError("PROVIDER_TRANSPORT_OR_RESPONSE_FAILED") from None
+
+
 class AgentProviderSettings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+
+    quant_lab_agent_provider: Literal["auto", "ollama", "openai"] = "auto"
     openai_api_key: SecretStr | None = None
     quant_lab_agent_model: str | None = None
+    quant_lab_ollama_model: str = "qwen3:4b"
+    quant_lab_ollama_host: str = "http://127.0.0.1:11434"
 
 
 def configured_provider() -> AgentModelProvider:
     try:
         settings = AgentProviderSettings()
+        if settings.quant_lab_agent_provider == "ollama":
+            return OllamaProvider(settings.quant_lab_ollama_model, settings.quant_lab_ollama_host)
         key, model = settings.openai_api_key, settings.quant_lab_agent_model
         if key is None or not key.get_secret_value() or not model:
             return UnavailableProvider()

@@ -35,7 +35,13 @@ def due_jobs(
         ):
             continue
         selected.append(job)
-        if job.job_type.value in {"BULL_SCAN", "BEAR_SCAN", "DEBATE"}:
+        if job.job_type.value in {
+            "BULL_SCAN",
+            "BEAR_SCAN",
+            "DOCUMENT_NEWS_REVIEW",
+            "QUANT_RESEARCH",
+            "DEBATE",
+        }:
             model_calls += 1
         if len(selected) >= policy.maximum_research_jobs_per_tick:
             break
