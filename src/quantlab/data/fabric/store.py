@@ -200,9 +200,16 @@ class PitStore:
         )
         con = duckdb.connect(str(self.layout.duckdb_path))
         try:
-            rel = con.execute(sql, [[str(p) for p in files], *params])
-            fetched = rel.arrow()
-            table = fetched.read_all() if hasattr(fetched, "read_all") else fetched
+            result = con.sql(sql, params=[[str(p) for p in files], *params])
+            if result is None:
+                raise DataIntegrityError("PIT query returned no relation")
+            if hasattr(result, "to_arrow_table"):
+                table = result.to_arrow_table()
+            elif hasattr(result, "arrow"):
+                fetched = result.arrow()
+                table = fetched.read_all() if hasattr(fetched, "read_all") else fetched
+            else:
+                raise DataIntegrityError("DuckDB relation cannot export Arrow data")
         finally:
             con.close()
         bars = table_to_bars(table)
