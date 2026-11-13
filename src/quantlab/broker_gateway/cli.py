@@ -37,7 +37,13 @@ def add_broker_parser(sub: Any) -> None:
     cmd.add_parser("health", help="connection health")
     connect_p = cmd.add_parser("connect", help="connect a read-only account adapter")
     connect_p.add_argument("--scenario", default="normal")
-    connect_p.add_argument("--adapter", choices=("mock", "kite"), default="mock")
+    from quantlab.data.policy import fixtures_enabled
+
+    connect_p.add_argument(
+        "--adapter",
+        choices=("mock", "kite") if fixtures_enabled() else ("kite",),
+        default="mock" if fixtures_enabled() else "kite",
+    )
     cmd.add_parser("disconnect", help="disconnect")
     cmd.add_parser("account", help="account snapshot")
     cmd.add_parser("profile", help="sanitized account profile")

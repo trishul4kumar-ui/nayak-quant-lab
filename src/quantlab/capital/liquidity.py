@@ -2,7 +2,13 @@
 
 from __future__ import annotations
 
+import math
+
 from quantlab.capital.definitions import LiquidityPolicy, LiquidityStatus
+
+
+def _finite_number(value: object) -> bool:
+    return isinstance(value, (float, int)) and not isinstance(value, bool) and math.isfinite(value)
 
 
 def classify_name(
@@ -10,9 +16,14 @@ def classify_name(
     notional: float,
     policy: LiquidityPolicy,
 ) -> LiquidityStatus:
-    if adv is None:
+    if (
+        not _finite_number(adv)
+        or not _finite_number(notional)
+        or not _finite_number(policy.participation_limit)
+        or not 0 <= policy.participation_limit <= 1
+    ):
         return LiquidityStatus.UNKNOWN
-    if adv <= 0:
+    if adv is None or adv <= 0:
         return LiquidityStatus.UNKNOWN
     if abs(notional) > policy.participation_limit * adv:
         return LiquidityStatus.INSUFFICIENT

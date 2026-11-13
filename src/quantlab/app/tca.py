@@ -8,6 +8,8 @@ from typing import Any
 from pydantic import BaseModel
 
 from quantlab.core.config import get_settings
+from quantlab.core.errors import DataIntegrityError
+from quantlab.data.policy import fixtures_enabled
 from quantlab.tca.enums import TCAKind
 from quantlab.tca.experiment import run_tca_experiment
 from quantlab.tca.models import TCARequest, TCAResult
@@ -51,7 +53,27 @@ def inspect_payload(run_id: str) -> dict[str, Any]:
     return payload
 
 
-def run_payload(*, ledger: str = "", calibrate: bool = False) -> dict[str, Any]:
+def run_payload(
+    *,
+    ledger: str = "",
+    calibrate: bool = False,
+    workflow_id: str = "",
+    repository_path: Path | None = None,
+) -> dict[str, Any]:
+    if not fixtures_enabled():
+        from quantlab.app.paper_workflow import run_selected_workflow
+
+        if calibrate:
+            raise DataIntegrityError(
+                "OBSERVED_CALIBRATION_UNAVAILABLE: simulated paper fills "
+                "cannot calibrate observed market impact"
+            )
+        return run_selected_workflow(
+            "tca",
+            workflow_id=workflow_id,
+            repository_path=repository_path,
+            ledger_path=_ledger_path(ledger),
+        )
     result, row = run_tca_experiment(
         TCARequest(calibrate=calibrate),
         ledger_path=_ledger_path(ledger),
@@ -78,6 +100,10 @@ def run_payload(*, ledger: str = "", calibrate: bool = False) -> dict[str, Any]:
 def _need() -> TCAResult:
     result = last_result()
     if result is None:
+        if not fixtures_enabled():
+            raise DataIntegrityError(
+                "TCA_RUN_REQUIRED: select a completed paper workflow with its original target"
+            )
         run_payload()
         result = last_result()
     assert result is not None
@@ -180,6 +206,21 @@ def report_payload() -> dict[str, Any]:
 
 
 def last_run_row() -> dict[str, Any] | None:
+    if not fixtures_enabled():
+        from quantlab.app.paper_workflow import latest_workflow_result
+
+        payload = latest_workflow_result("tca")
+        if payload is None:
+            return None
+        return {
+            "id": payload["run"]["tca_run_id"],
+            "kind": payload["kind"],
+            "shortfall": payload["shortfall"]["total"],
+            "fragility": payload["fragility"]["status"],
+            "hash": payload["run"]["tca_hash"],
+            "workflow_id": payload["workflow_id"],
+            "historical_replay": True,
+        }
     result = last_result()
     if result is None:
         return None

@@ -132,6 +132,22 @@ def test_seven_real_workers_supervisor_and_frozen_cited_reports(
     assert any(row.event == "INSTITUTION_CYCLE_FROZEN" for row in results)
 
 
+def test_configured_budget_covers_analysts_and_institution_roles(
+    repo: AgentRepository, snapshot: RealTimeSnapshot,
+) -> None:
+    from quantlab.agents.provider_budget import ProviderBudgetLedger, ProviderBudgetPolicy
+
+    ledger = ProviderBudgetLedger(repo)
+    ledger.configure(ProviderBudgetPolicy(100_000, 100_000, 100_000))
+    provider = InstitutionFixtureProvider()
+    InstitutionDeskService(repo, provider).run(snapshot, now=NOW, replay=True)
+    assert len(provider.requests) == 10
+    assert {request.budget_family_id for request in provider.requests} == {"desk:research"}
+    status = ledger.status()
+    assert status["reservation_count"] == 10
+    assert status["reserved_lifetime"] == sum(r.max_output_tokens for r in provider.requests)
+
+
 def test_unknown_canonical_tools_are_not_invented_as_pass(
     repo: AgentRepository,
     snapshot: RealTimeSnapshot,

@@ -8,11 +8,11 @@ from datetime import timedelta
 import numpy as np
 import pytest
 
-from quantlab.core.errors import OptimizationError
+from quantlab.core.errors import CovarianceError, OptimizationError
 from quantlab.data.providers.memory import MemoryBarProvider
 from quantlab.portfolio.builder import construct_targets
 from quantlab.portfolio.constraints import long_only_invested
-from quantlab.portfolio.covariance import as_array, sample_covariance
+from quantlab.portfolio.covariance import as_array, pit_return_matrix, sample_covariance
 from quantlab.portfolio.optimize import (
     equal_risk_contribution,
     min_variance_closed_form,
@@ -113,3 +113,25 @@ def test_future_bars_do_not_change_weights_at_t() -> None:
     assert left.keys() == right.keys()
     for key in left:
         assert left[key] == pytest.approx(right[key], abs=1e-12)
+
+
+@pytest.mark.portfolio
+def test_covariance_refuses_unaligned_return_intervals() -> None:
+    bars = MemoryBarProvider(n_days=12).all_bars()
+    first, second = list(bars)[:2]
+    subset = {first: bars[first], second: bars[second]}
+    # The old code paired the last N returns by index even when the returns
+    # represented different time periods.
+    cutoff = subset[first][-1].pit.event_time
+    subset[second] = subset[second][:-2] + subset[second][-1:]
+    with pytest.raises(CovarianceError, match="aligned PIT return intervals"):
+        pit_return_matrix(subset, cutoff, [str(first), str(second)], lookback=3)
+
+
+@pytest.mark.portfolio
+def test_covariance_does_not_silently_drop_a_requested_instrument() -> None:
+    bars = MemoryBarProvider(n_days=12).all_bars()
+    first, second = list(bars)[:2]
+    cutoff = bars[first][-1].pit.event_time
+    with pytest.raises(CovarianceError, match="missing PIT history"):
+        pit_return_matrix({first: bars[first]}, cutoff, [str(first), str(second)], lookback=3)

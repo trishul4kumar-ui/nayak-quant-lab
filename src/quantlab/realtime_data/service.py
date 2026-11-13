@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 
 from quantlab.core.config import LiveSafetyGates
+from quantlab.data.policy import fixtures_enabled, require_test_fixtures
 from quantlab.realtime_data.audit import append as record_audit
 from quantlab.realtime_data.audit import reset_for_tests as reset_audit
 from quantlab.realtime_data.audit import rows as audit_rows
@@ -69,7 +70,13 @@ def select_adapter(name: str) -> None:
 def _adapter() -> MarketDataAdapter:
     global _ADAPTER
     if _ADAPTER is None:
-        _ADAPTER = MockMarketDataAdapter()
+        _ADAPTER = (
+            MockMarketDataAdapter()
+            if fixtures_enabled()
+            else KiteMarketDataAdapter.from_environment()
+        )
+    if isinstance(_ADAPTER, MockMarketDataAdapter):
+        require_test_fixtures("mock quote adapter")
     return _ADAPTER
 
 
@@ -128,7 +135,13 @@ def start(
     if adapter is not None:
         set_adapter(adapter)
     elif adapter_name is None:
-        set_adapter(MockMarketDataAdapter(value))
+        if fixtures_enabled():
+            set_adapter(MockMarketDataAdapter(value))
+        else:
+            if value is not MockFeedScenario.NORMAL:
+                require_test_fixtures("mock feed scenarios")
+            select_adapter("kite")
+            adapter_name = "kite"
     else:
         select_adapter(adapter_name)
     adapter = _adapter()
@@ -179,13 +192,15 @@ def snapshot(*, as_of: datetime | None = None) -> RealTimeSnapshot:
     _assert_safety()
     adapter = _adapter()
     if current() is FeedState.DISCONNECTED:
-        start()
+        start(adapter=adapter)
     observed = adapter.poll()
     global _LAST_OBS
     if observed:
         _LAST_OBS = observed
     if isinstance(adapter, ProductionMarketDataAdapter) and not observed and not _LAST_OBS:
         raise RealTimeDataError("production feed has no observations; refusing synthetic fallback")
+    if not fixtures_enabled() and not observed:
+        raise RealTimeDataError("REAL_DATA_UNAVAILABLE: no current observations; no fallback")
     rows = observed or _LAST_OBS or seed_observations()
     when = as_of
     if when is None:
@@ -251,9 +266,9 @@ def health() -> FeedHealth:
     connected = current() in {FeedState.CONNECTED, FeedState.DEGRADED, FeedState.STALE}
     quality = last.quality if last else QualityStatus.UNKNOWN
     overall = _overall(current(), quality, last.freshness if last else FreshnessStatus.UNKNOWN)
-    adapter = _adapter()
-    active_source = adapter.source_id
-    source_priority: tuple[str, ...] = (adapter.source_id,)
+    adapter = _adapter() if fixtures_enabled() else _ADAPTER
+    active_source = adapter.source_id if adapter is not None else "kite-rest-quote-v3"
+    source_priority: tuple[str, ...] = (active_source,)
     source_switches: tuple[str, ...] = ()
     if isinstance(adapter, ProductionMarketDataAdapter):
         active_source = adapter.source_id
@@ -309,7 +324,9 @@ def audit_history() -> list[dict[str, object]]:
 
 def source_status() -> dict[str, object]:
     """Safe provider metadata only; credentials and endpoints are never exposed."""
-    adapter = _adapter()
+    adapter = _adapter() if fixtures_enabled() else _ADAPTER
+    if adapter is None:
+        return {"active_source": "kite-rest-quote-v3", "state": "disconnected", "real_only": True}
     if isinstance(adapter, ProductionMarketDataAdapter):
         return adapter.source_health()
     return {

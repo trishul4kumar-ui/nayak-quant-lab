@@ -2,19 +2,25 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from quantlab import __version__
+from quantlab.agents.hashing import digest
 from quantlab.backtest.engine import BacktestConfig, BacktestResult, run_backtest
-from quantlab.core.config import LiveSafetyGates
+from quantlab.core.config import LiveSafetyGates, get_settings
 from quantlab.core.errors import DataIntegrityError
 from quantlab.core.identifiers import AlphaId, ExperimentId, HypothesisId, InstrumentId
-from quantlab.data.fabric.catalog import DatasetRecord
+from quantlab.data.fabric.catalog import DatasetCatalog, DatasetRecord
+from quantlab.data.fabric.checksums import sha256_bytes
+from quantlab.data.fabric.csvio import parse_ohlcv_csv
 from quantlab.data.fabric.ingest import SYNTHETIC_DATASET_ID, materialize_synthetic
 from quantlab.data.fabric.layout import FabricLayout
 from quantlab.data.fabric.store import PitStore
+from quantlab.data.fabric.types import DataKind, DatasetState
+from quantlab.data.policy import fixtures_enabled, require_real_data
 from quantlab.data.providers.memory import MemoryBarProvider
 from quantlab.data.validation import validate_bars
 from quantlab.domain.models import (
@@ -44,6 +50,103 @@ class SyntheticFrame:
     flat: list[OHLCVBar]
 
 
+def load_real_frame(*, fabric_root: Path, n_days: int | None = None) -> SyntheticFrame:
+    """Explicit, version-pinned REAL research inputs; never an implicit latest seed.
+
+    A current broker-history capture deliberately cannot meet this contract:
+    archived availability/revisions and a PIT store must be verified separately.
+    """
+    selection = get_settings().research_dataset
+    if "@" not in selection:
+        raise DataIntegrityError(
+            "REAL_VALIDATED_DATASET_REQUIRED: select QUANT_LAB_RESEARCH_DATASET=dataset@version. "
+            "Broker history is available in Backtest Lab; it is not a certified PIT dataset."
+        )
+    dataset, version = selection.rsplit("@", 1)
+    if any(
+        not re.fullmatch(r"[A-Za-z0-9_-][A-Za-z0-9_.-]{0,127}", part) for part in (dataset, version)
+    ):
+        raise DataIntegrityError("REAL_DATASET_ID_INVALID")
+    layout = FabricLayout(fabric_root)
+    with DatasetCatalog(layout) as catalog:
+        record = catalog.get(dataset, version)
+    if record is None or record.data_kind is not DataKind.REAL:
+        raise DataIntegrityError("REAL_DATASET_NOT_FOUND_OR_NONREAL")
+    require_real_data(record.data_kind.value, source=record.source)
+    if (
+        record.state is not DatasetState.RESEARCH_READY
+        or record.extra.get("historical_availability_verified") != "true"
+        or record.schema_name != "ohlcv_csv_v1"
+    ):
+        raise DataIntegrityError(
+            "REAL_PIT_DATASET_NOT_VERIFIED: no generated or relabelled fallback"
+        )
+    raw_as_of = record.extra.get("max_available_time")
+    if not raw_as_of:
+        raise DataIntegrityError("REAL_DATASET_AVAILABILITY_REQUIRED")
+    raw_name = record.extra.get("raw_filename", "")
+    if not raw_name or Path(raw_name).name != raw_name:
+        raise DataIntegrityError("REAL_DATASET_RAW_SOURCE_REQUIRED")
+    raw_path = layout.raw_dir(dataset, version) / raw_name
+    if not raw_path.is_file() or sha256_bytes(raw_path.read_bytes()) != record.checksum:
+        raise DataIntegrityError("REAL_DATASET_CHECKSUM_MISMATCH")
+    original, _ = parse_ohlcv_csv(
+        raw_path, data_kind=DataKind.REAL, dataset_version=version, source_id=record.source
+    )
+    bars = PitStore(layout, dataset, version).all_as_of(datetime.fromisoformat(raw_as_of))
+    if not bars:
+        raise DataIntegrityError("REAL_DATASET_HAS_NO_PIT_BARS")
+    flat = []
+    for series in bars.values():
+        for bar in series:
+            require_real_data(bar.data_kind, source=bar.source_id)
+            if bar.dataset_version != version or not bar.source_id:
+                raise DataIntegrityError("REAL_DATASET_BAR_BINDING_MISMATCH")
+        flat.extend(validate_bars(series))
+
+    def facts(rows: list[OHLCVBar]) -> str:
+        return digest(
+            sorted(
+                [
+                    (
+                        str(bar.instrument),
+                        bar.pit.event_time.astimezone(UTC).isoformat(),
+                        bar.pit.effective_time.astimezone(UTC).isoformat(),
+                        bar.pit.available_time.astimezone(UTC).isoformat(),
+                        bar.open,
+                        bar.high,
+                        bar.low,
+                        bar.close,
+                        bar.volume,
+                    )
+                    for bar in rows
+                ]
+            )
+        )
+
+    if facts(original) != facts(flat):
+        raise DataIntegrityError("REAL_DATASET_PIT_RAW_BINDING_MISMATCH")
+    if n_days is not None:
+        if isinstance(n_days, bool) or not isinstance(n_days, int) or n_days < 1:
+            raise DataIntegrityError("REAL_HISTORY_RANGE_INVALID")
+        last = max(bar.pit.event_time for bar in flat)
+        cutoff = (last - timedelta(days=n_days - 1)).replace(
+            hour=0, minute=0, second=0, microsecond=0
+        )
+        bars = {
+            key: selected
+            for key, series in bars.items()
+            if (selected := [bar for bar in series if bar.pit.event_time >= cutoff])
+        }
+        flat = [bar for series in bars.values() for bar in series]
+    return SyntheticFrame(
+        record=record,
+        instruments=[Instrument(id=key, name=key.symbol) for key in bars],
+        bars=bars,
+        flat=flat,
+    )
+
+
 def load_synthetic_frame(
     *,
     n_days: int = 80,
@@ -52,6 +155,8 @@ def load_synthetic_frame(
 ) -> SyntheticFrame:
     path = ledger_path or Path("experiments/ledger.jsonl")
     layout = FabricLayout(fabric_root or (path.parent / "fabric"))
+    if not fixtures_enabled():
+        return load_real_frame(fabric_root=layout.root, n_days=n_days)
     ingested = materialize_synthetic(layout, n_days=n_days)
     record = ingested.record
     max_available = record.extra.get("max_available_time")
@@ -172,7 +277,7 @@ def _slice_from_frame(
         id=str(HypothesisId()),
         title="Cross-sectional momentum persists one day",
         statement="Names with higher 20-day momentum outperform on the next bar after costs.",
-        economic_intuition="Underreaction / trend following in a small synthetic universe.",
+        economic_intuition="Underreaction / trend following in the selected universe.",
         mathematical_formulation="rank(zscore(close[t]/close[t-20]-1))",
         expected_effect="positive next-bar long-only spread",
         universe=[str(i.id) for i in frame.instruments],
@@ -230,7 +335,9 @@ def _slice_from_frame(
         dataset_version=record.version,
         ingested_at=datetime.now(tz=UTC),
         transformations=[
-            "materialize_synthetic",
+            "selected_real_dataset"
+            if record.data_kind is DataKind.REAL
+            else "materialize_synthetic",
             "sha256",
             "validate_bars",
             "parquet_pit_query",
@@ -244,7 +351,7 @@ def _slice_from_frame(
         snapshot_id=record.snapshot_id,
         data_kind=record.data_kind.value,
         checksum=record.checksum,
-        source="memory_synthetic_nse",
+        source=record.source,
     )
     env = environment()
     status = ExperimentStatus.FAILED if integrity.failed() else ExperimentStatus.PASSED
@@ -259,7 +366,9 @@ def _slice_from_frame(
         feature_versions={"momentum": strategy.version},
         label_definition="next_bar_close_return",
         hyperparameters={"lookback": lookback, "top_n": top_n, "cost_bps": cost_bps},
-        test_period="synthetic-80d",
+        test_period="selected_real_dataset"
+        if record.data_kind is DataKind.REAL
+        else "synthetic-80d",
         transaction_cost_bps=cost_bps,
         slippage_model="none",
         random_seed=0,
@@ -310,7 +419,9 @@ def _experiment_from_validation(
         dataset_version=record.version,
         ingested_at=datetime.now(tz=UTC),
         transformations=[
-            "materialize_synthetic",
+            "selected_real_dataset"
+            if record.data_kind is DataKind.REAL
+            else "materialize_synthetic",
             "validation_suite",
             "walk_forward",
             "cost_sensitivity",
@@ -323,7 +434,7 @@ def _experiment_from_validation(
         snapshot_id=record.snapshot_id,
         data_kind=record.data_kind.value,
         checksum=record.checksum,
-        source="memory_synthetic_nse",
+        source=record.source,
     )
     payload = lineage.as_dict()
     payload["git_dirty"] = "true" if git_dirty() else "false"
@@ -338,7 +449,9 @@ def _experiment_from_validation(
         feature_versions={"momentum": strategy_version},
         label_definition="next_bar_close_return",
         hyperparameters={"lookback": cfg.lookback, "top_n": cfg.top_n, "cost_bps": cfg.cost_bps},
-        test_period="synthetic-walk-forward-oos",
+        test_period="real-walk-forward-oos"
+        if record.data_kind is DataKind.REAL
+        else "synthetic-walk-forward-oos",
         transaction_cost_bps=cfg.cost_bps,
         slippage_model=cfg.slippage_model,
         random_seed=validation.seed,

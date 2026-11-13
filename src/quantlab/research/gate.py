@@ -49,6 +49,7 @@ def evaluate_research_gate(
     n_hypotheses: int,
     test_used_for_selection: bool,
     multiple_testing_status: CheckResult | None = None,
+    pit_evidence: CheckResult | None = None,
 ) -> ResearchGateResult:
     reasons: list[GateReason] = []
     warnings: list[str] = []
@@ -61,6 +62,12 @@ def evaluate_research_gate(
         CheckResult.FAIL if integrity_failed else CheckResult.PASS,
         True,
         "FAIL cannot become a successful research result",
+    )
+    add(
+        "pit_evidence",
+        pit_evidence if pit_evidence is not None else CheckResult.NOT_TESTED,
+        True,
+        "PIT query evidence for this research path",
     )
     add(
         "next_bar_fill",
@@ -125,6 +132,9 @@ def evaluate_research_gate(
         outcome = GateOutcome.REJECT
     elif any(item.result is CheckResult.WARN for item in reasons):
         outcome = GateOutcome.WARN
+    elif any(item.required and item.result is CheckResult.NOT_TESTED for item in reasons):
+        outcome = GateOutcome.WARN
+        warnings.append("required evidence is not tested")
     elif walk_forward_windows > 0 and statistical_status is CheckResult.PASS:
         outcome = GateOutcome.RESEARCH_CANDIDATE
     else:

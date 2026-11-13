@@ -10,6 +10,7 @@ from typing import Any
 
 from quantlab.core.errors import DataIntegrityError, LookAheadError
 from quantlab.data.fabric.catalog import DatasetCatalog
+from quantlab.data.fabric.fundamentals import ReferenceDataStore, ReferenceKind
 from quantlab.data.fabric.gate import evaluate_research_gate
 from quantlab.data.fabric.ingest import ingest_csv, materialize_synthetic
 from quantlab.data.fabric.layout import FabricLayout, resolve_fabric_root
@@ -48,6 +49,18 @@ def add_data_parser(sub: Any) -> None:
     data_sub.add_parser("corporate-actions", help="list typed corporate actions")
     data_sub.add_parser("calendar", help="calendar provenance (not invented NSE holidays)")
     data_sub.add_parser("universe", help="universe.as_of architecture status")
+    ref_ingest = data_sub.add_parser(
+        "reference-ingest", help="ingest a user-supplied versioned PIT reference JSON document"
+    )
+    ref_ingest.add_argument("source", help="path to an authorized reference JSON document")
+    ref_query = data_sub.add_parser("reference-query", help="query a PIT reference fact")
+    ref_query.add_argument("dataset_id")
+    ref_query.add_argument("version")
+    ref_query.add_argument("security_id")
+    ref_query.add_argument("kind", choices=[item.value for item in ReferenceKind])
+    ref_query.add_argument("metric")
+    ref_query.add_argument("--as-of", required=True, help="timezone-aware ISO-8601 cutoff")
+    ref_query.add_argument("--allow-synthetic", action="store_true", help="isolated tests only")
 
 
 def _layout() -> FabricLayout:
@@ -71,6 +84,59 @@ def _parse_ref(ref: str, catalog: DatasetCatalog) -> tuple[str, str]:
 def run_data_command(args: argparse.Namespace) -> int:
     layout = _layout()
     cmd = args.data_cmd
+    if cmd == "reference-ingest":
+        source_path = Path(args.source)
+        if not source_path.is_file() or source_path.stat().st_size > 16 * 1024 * 1024:
+            raise DataIntegrityError("reference source must be a file no larger than 16 MiB")
+        with source_path.open("rb") as stream:
+            raw = stream.read(16 * 1024 * 1024 + 1)
+        if len(raw) > 16 * 1024 * 1024:
+            raise DataIntegrityError("reference source exceeds size limit")
+        reference_store = ReferenceDataStore(layout.metadata / "reference.sqlite")
+        try:
+            dataset = reference_store.ingest_json(raw)
+            _, checksum = reference_store.get_dataset(dataset.dataset_id, dataset.version)
+        finally:
+            reference_store.close()
+        print(json.dumps({
+            "dataset_id": dataset.dataset_id,
+            "version": dataset.version,
+            "source": dataset.source,
+            "source_version": dataset.source_version,
+            "source_checksum": checksum,
+            "data_kind": dataset.data_kind.value,
+            "observations": len(dataset.observations),
+            "status": "STORED_UNCERTIFIED",
+        }, indent=2))
+        return 0
+    if cmd == "reference-query":
+        try:
+            as_of = datetime.fromisoformat(args.as_of.replace("Z", "+00:00"))
+        except ValueError as exc:
+            raise DataIntegrityError("reference cutoff must be an ISO-8601 timestamp") from exc
+        if as_of.utcoffset() is None:
+            raise DataIntegrityError("reference cutoff must be timezone-aware")
+        reference_store = ReferenceDataStore(layout.metadata / "reference.sqlite")
+        try:
+            reference_result = reference_store.as_of(
+                args.dataset_id,
+                args.version,
+                security_id=args.security_id,
+                kind=ReferenceKind(args.kind),
+                metric=args.metric,
+                as_of=as_of,
+                allow_synthetic=args.allow_synthetic,
+            )
+        finally:
+            reference_store.close()
+        if reference_result is None:
+            print(json.dumps({"status": "NOT_FOUND", "note": "no fact known at cutoff"}))
+            return 2
+        print(json.dumps(
+            {"status": "OBSERVED_UNCERTIFIED", **reference_result.model_dump(mode="json")},
+            indent=2,
+        ))
+        return 0
     if cmd == "list":
         catalog = DatasetCatalog(layout)
         try:

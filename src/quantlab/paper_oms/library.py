@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 
 from quantlab.capital.definitions import DecisionStatus, InvestmentDecision, TargetPortfolio
+from quantlab.data.policy import require_test_fixtures
 from quantlab.paper_oms.models import CashLedger, PaperAccount, PaperMarketSnapshot, PaperOMSRequest
 
 SEED_ACCOUNT_ID = "PAPER-001"
@@ -21,6 +22,7 @@ SEED_CASH = 1_000_000.0
 
 
 def seed_snapshot(*, volumes: dict[str, float | None] | None = None) -> PaperMarketSnapshot:
+    require_test_fixtures("seed paper market prices/volumes")
     return PaperMarketSnapshot(
         snapshot_id="seed",
         as_of=SEED_AS_OF,
@@ -33,6 +35,7 @@ def seed_snapshot(*, volumes: dict[str, float | None] | None = None) -> PaperMar
 
 
 def seed_account(*, cash: float = SEED_CASH, allow_short: bool = False) -> PaperAccount:
+    require_test_fixtures("seed paper account")
     return PaperAccount(
         account_id=SEED_ACCOUNT_ID,
         cash=cash,
@@ -49,6 +52,7 @@ def seed_account(*, cash: float = SEED_CASH, allow_short: bool = False) -> Paper
 
 
 def seed_target(*, starting: float = SEED_CASH) -> TargetPortfolio:
+    require_test_fixtures("seed target portfolio")
     notionals = {name: weight * starting for name, weight in SEED_WEIGHTS.items()}
     return TargetPortfolio(
         portfolio_id="TP-PAPER-SEED",
@@ -65,6 +69,7 @@ def seed_target(*, starting: float = SEED_CASH) -> TargetPortfolio:
 
 
 def seed_decision() -> InvestmentDecision:
+    require_test_fixtures("seed investment decision")
     return InvestmentDecision(
         decision_id="DEC-PAPER-SEED",
         decision_time=SEED_AS_OF,

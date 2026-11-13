@@ -58,7 +58,9 @@ def format_validation_report(report: ValidationReport) -> str:
         f"Hypotheses: {report.multiple_testing.n_hypotheses}",
         f"Correction: {report.multiple_testing.method}",
         f"Discoveries: {report.multiple_testing.discoveries}",
-        f"Deflated Sharpe: {report.deflated_sharpe.deflated_sharpe}",
+        f"Deflated Sharpe: {report.deflated_sharpe.deflated_sharpe} "
+        f"({report.deflated_sharpe.status.value})",
+        f"Deflated Sharpe note: {report.deflated_sharpe.note}",
         f"PBO: {report.overfitting.pbo} ({report.overfitting.status.value})",
         "",
         "RESEARCH GATE",

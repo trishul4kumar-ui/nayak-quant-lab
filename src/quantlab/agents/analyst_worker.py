@@ -8,6 +8,7 @@ import time
 from collections.abc import Callable
 from datetime import UTC, datetime
 
+from quantlab.agents.budget_scopes import DESK_RESEARCH_FAMILY
 from quantlab.agents.context import FrozenHistory, create_context, validate_context
 from quantlab.agents.contracts import (
     AgentMandate,
@@ -384,6 +385,7 @@ class AnalystWorker:
             )
             return StructuredRequest(
                 run_id=context.run_id,
+                budget_family_id=DESK_RESEARCH_FAMILY,
                 sections=prompt_sections(
                     mandate, context, task=task, untrusted_evidence_json=evidence
                 ),

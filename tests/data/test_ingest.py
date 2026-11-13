@@ -1,5 +1,8 @@
 from pathlib import Path
 
+import pytest
+
+from quantlab.core.errors import DataIntegrityError
 from quantlab.data.fabric.csvio import bars_to_csv_bytes
 from quantlab.data.fabric.ingest import ingest_csv, materialize_synthetic
 from quantlab.data.fabric.layout import FabricLayout
@@ -14,6 +17,25 @@ def test_checksum_ingest_is_idempotent(tmp_path: Path) -> None:
     assert first.record.checksum == second.record.checksum
     assert second.skipped is True
     assert first.research_ready is True
+
+
+def test_synthetic_variants_use_distinct_immutable_versions(tmp_path: Path) -> None:
+    layout = FabricLayout(tmp_path)
+    short = materialize_synthetic(layout, n_days=60)
+    long = materialize_synthetic(layout, n_days=80)
+    again = materialize_synthetic(layout, n_days=60)
+    assert short.record.version != long.record.version
+    assert short.record.checksum != long.record.checksum
+    assert again.skipped and again.record == short.record
+
+
+def test_synthetic_explicit_version_still_rejects_conflicting_content(tmp_path: Path) -> None:
+    layout = FabricLayout(tmp_path)
+    first = materialize_synthetic(layout, n_days=60, version="manual-v1")
+    with pytest.raises(DataIntegrityError, match="DATASET_VERSION_CONFLICT"):
+        materialize_synthetic(layout, n_days=80, version="manual-v1")
+    again = materialize_synthetic(layout, n_days=60, version="manual-v1")
+    assert again.skipped and again.record == first.record
 
 
 def test_csv_ingest_path_labeled_synthetic(tmp_path: Path) -> None:
@@ -36,5 +58,7 @@ def test_csv_ingest_path_labeled_synthetic(tmp_path: Path) -> None:
     assert result.research_ready is True
     assert result.record.checksum
     assert result.record.source.endswith("user_nse.csv")
-    again = ingest_csv(csv_path, layout, dataset_id="user-nse", version="v1")
+    again = ingest_csv(
+        csv_path, layout, dataset_id="user-nse", version="v1", data_kind=DataKind.SYNTHETIC
+    )
     assert again.skipped is True

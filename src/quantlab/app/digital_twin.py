@@ -120,8 +120,7 @@ def failures_payload(kind: str = "stale_market") -> dict[str, Any]:
 
 
 def recovery_payload() -> dict[str, Any]:
-    ck = checkpoint()
-    return _safe(lambda: _row(recover(ck.checkpoint_id)))
+    return _safe(lambda: _row(recover(checkpoint().checkpoint_id)))
 
 
 def determinism_payload() -> dict[str, Any]:

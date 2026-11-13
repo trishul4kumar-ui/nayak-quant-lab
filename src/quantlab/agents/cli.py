@@ -12,8 +12,10 @@ from quantlab.agents.bull import BullWorker, bull_mandate, create_bull_context, 
 from quantlab.agents.contracts import AgentRole, AgentRunRecord, AgentState, ResearchMode
 from quantlab.agents.debate import DebateWorker, create_debate, verify_transcript
 from quantlab.agents.debate_contracts import DebateStatus, DebateTranscript
+from quantlab.agents.errors import AgentProviderError
 from quantlab.agents.inputs import read_history, read_snapshot
 from quantlab.agents.provider import configured_provider
+from quantlab.agents.provider_budget import ProviderBudgetLedger, ProviderBudgetPolicy
 from quantlab.agents.repository import AgentRepository
 from quantlab.agents.tool_gateway import AgentToolGateway
 from quantlab.ai.permissions import DENIED_CAPABILITIES
@@ -30,6 +32,8 @@ def add_agents_parser(sub: argparse._SubParsersAction[argparse.ArgumentParser]) 
             "tools",
             "audit",
             "provider-health",
+            "provider-budget-status",
+            "configure-provider-budget",
             "run-bull",
             "bull-history",
             "run-bear",
@@ -49,6 +53,9 @@ def add_agents_parser(sub: argparse._SubParsersAction[argparse.ArgumentParser]) 
     parser.add_argument("--bear-memo")
     parser.add_argument("--rebuttals", action="store_true")
     parser.add_argument("--transcript")
+    parser.add_argument("--task-output-tokens", type=int)
+    parser.add_argument("--family-output-tokens", type=int)
+    parser.add_argument("--daily-output-tokens", type=int)
 
 
 def run_agents_command(args: argparse.Namespace) -> int:
@@ -56,6 +63,9 @@ def run_agents_command(args: argparse.Namespace) -> int:
         return _run_agents_command(args)
     except ControlPlaneStoreError:
         print(json.dumps({"error": "AGENT_PERSISTENCE_UNAVAILABLE", "live_trading": False}))
+        return 2
+    except AgentProviderError as exc:
+        print(json.dumps({"error": str(exc), "live_trading": False}))
         return 2
     except (OSError, RuntimeError, ValueError, KeyError):
         print(json.dumps({"error": "AGENT_INPUT_OR_RUN_BLOCKED", "live_trading": False}))
@@ -68,11 +78,23 @@ def _run_agents_command(args: argparse.Namespace) -> int:
     try:
         provider = configured_provider()
         mandate = bull_mandate(datetime(2026, 10, 4, tzinfo=UTC))
-        if args.agents_action == "adjudicate":
+        if args.agents_action == "provider-budget-status":
+            payload: object = ProviderBudgetLedger(repository).status()
+        elif args.agents_action == "configure-provider-budget":
+            if any(value is None for value in (
+                args.task_output_tokens, args.family_output_tokens, args.daily_output_tokens
+            )):
+                raise ValueError("EXPLICIT_PROVIDER_BUDGET_LIMITS_REQUIRED")
+            ledger = ProviderBudgetLedger(repository)
+            ledger.configure(ProviderBudgetPolicy(
+                args.task_output_tokens, args.family_output_tokens, args.daily_output_tokens
+            ))
+            payload = ledger.status()
+        elif args.agents_action == "adjudicate":
             if not args.transcript:
                 raise ValueError("EXPLICIT_TRANSCRIPT_REQUIRED")
             decision = run_adjudication(repository, args.transcript, now=datetime.now(UTC))
-            payload: object = decision.model_dump(mode="json")
+            payload = decision.model_dump(mode="json")
             exit_code = 2 if decision.no_trade else 0
         elif args.agents_action == "adjudication-history":
             decisions = repository.list(AdjudicationDecision)[-100:]

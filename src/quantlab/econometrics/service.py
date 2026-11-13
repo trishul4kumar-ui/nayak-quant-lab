@@ -69,6 +69,9 @@ def _integrity(
 
 
 def run_econometrics(request: EconometricRequest | None = None) -> EconometricResult:
+    from quantlab.data.policy import require_test_fixtures
+
+    require_test_fixtures("seed econometric series/panel/causal experiment")
     used = request or EconometricRequest()
     if used.live_trading or LiveSafetyGates().live_trading:
         raise SafetyError("LIVE_TRADING must remain false; econometrics does not trade")

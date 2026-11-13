@@ -1,5 +1,8 @@
 from datetime import UTC, datetime, timedelta
 
+import pytest
+
+from quantlab.core.errors import DataIntegrityError
 from quantlab.data.fabric.corporate_actions import CorporateAction, apply_backward_splits
 from quantlab.data.fabric.types import CorporateActionType
 from tests.data.helpers import make_bar, utc_day
@@ -24,9 +27,11 @@ def test_split_not_applied_before_available_time() -> None:
         available_time=t1,
         ratio=2.0,
     )
-    before = apply_backward_splits(bars, [action], as_of=t0)
-    assert [b.close for b in before] == [100.0, 100.0, 50.0]
-    after = apply_backward_splits(bars, [action], as_of=t1)
+    before = apply_backward_splits(bars[:1], [action], as_of=t0)
+    assert [b.close for b in before] == [100.0]
+    announced = apply_backward_splits(bars[:2], [action], as_of=t1)
+    assert [b.close for b in announced] == [100.0, 100.0]
+    after = apply_backward_splits(bars, [action], as_of=t2)
     assert after[0].close == 50.0
     assert after[1].close == 50.0
     assert after[2].close == 50.0
@@ -47,5 +52,5 @@ def test_missing_announcement_is_unknowable() -> None:
     )
     assert action.is_knowable_at(datetime.now(tz=UTC)) is False
     bars = [make_bar("TCS", t0, close=100.0)]
-    out = apply_backward_splits(bars, [action], as_of=datetime.now(tz=UTC))
-    assert out[0].close == 100.0
+    with pytest.raises(DataIntegrityError, match="availability is unknown"):
+        apply_backward_splits(bars, [action], as_of=datetime.now(tz=UTC))

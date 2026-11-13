@@ -210,12 +210,44 @@ def replay(run_id: str = "last") -> TwinRun:
     _assert_safety()
     original = get_run(run_id)
     if original is None:
-        original = run_twin()
-    replayed = run_twin(mode=original.mode, failure=original.failure)
-    if (
-        replayed.decision_hash != original.decision_hash
-        or replayed.snapshot_hash != original.snapshot_hash
-        or replayed.fill_hash != original.fill_hash
+        raise ReplayMismatch("no original twin run to replay")
+    if not original.events:
+        raise ReplayMismatch("original twin run has no replayable events")
+    replayed = run_twin(
+        mode=original.mode, failure=original.failure, as_of=original.events[0].event_time
+    )
+    original_hashes = (
+        original.snapshot_hash,
+        original.decision_hash,
+        original.portfolio_hash,
+        original.fill_hash,
+        original.account_hash,
+        original.reconciliation_hash,
+        original.state_hash,
+    )
+    replay_hashes = (
+        replayed.snapshot_hash,
+        replayed.decision_hash,
+        replayed.portfolio_hash,
+        replayed.fill_hash,
+        replayed.account_hash,
+        replayed.reconciliation_hash,
+        replayed.state_hash,
+    )
+
+    def event_identity(event: TwinEvent) -> tuple[object, ...]:
+        # Event/run identifiers legitimately differ across replay runs.
+        return (
+            event.event_type,
+            event.event_time,
+            event.sequence,
+            event.payload_hash,
+            event.state_hash_before,
+            event.state_hash_after,
+        )
+
+    if original_hashes != replay_hashes or tuple(map(event_identity, original.events)) != tuple(
+        map(event_identity, replayed.events)
     ):
         raise ReplayMismatch("original_run != replay_run")
     record_audit("replay", run_id=original.run_id, match=True)
@@ -243,8 +275,12 @@ def inject_failure(kind: FailureKind | str) -> TwinRun:
 def checkpoint(run_id: str = "last") -> TwinCheckpoint:
     item = get_run(run_id)
     if item is None:
-        item = run_twin()
-    ck = _checkpoint(item.run_id, "manual", len(item.events), SEED_AS_OF, item.state_hash)
+        raise TwinCheckpointError("no twin run to checkpoint")
+    if not item.events:
+        raise TwinCheckpointError("twin run has no checkpointable events")
+    ck = _checkpoint(
+        item.run_id, "manual", len(item.events), item.events[-1].event_time, item.state_hash
+    )
     _CHECKPOINTS[ck.checkpoint_id] = ck
     record_audit("checkpoint", checkpoint_id=ck.checkpoint_id)
     return ck
@@ -254,12 +290,9 @@ def recover(checkpoint_id: str) -> TwinRun:
     ck = _CHECKPOINTS.get(checkpoint_id)
     if ck is None:
         raise TwinCheckpointError("unknown checkpoint")
-    restored = run_twin(mode=TwinMode.DETERMINISM_TEST)
-    replayed = run_twin(mode=TwinMode.DETERMINISM_TEST)
-    if restored.decision_hash != replayed.decision_hash:
-        raise TwinCheckpointError("recovery state mismatch")
-    record_audit("recover", checkpoint_id=checkpoint_id, checkpoint=ck.checkpoint_id)
-    return restored
+    # Checkpoints currently contain hashes, not sufficient source/state data to
+    # restore a run. Comparing two unrelated fresh runs is not recovery.
+    raise TwinCheckpointError("checkpoint restoration is not implemented")
 
 
 def halt(run_id: str = "last") -> TwinRun:

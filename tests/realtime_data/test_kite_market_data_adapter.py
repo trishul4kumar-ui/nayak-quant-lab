@@ -160,6 +160,42 @@ def test_old_quote_and_zero_depth_are_stale_not_a_false_crossed_market_fault() -
     assert "crossed_or_locked_quote" not in frozen.extras["quality_faults"]
 
 
+@pytest.mark.parametrize(
+    "invalid_time",
+    ["1970-01-01 00:00:00", "0001-01-01 00:00:00", "2026-10-03 09:30:03", "2035-01-01T00:00:00Z"],
+)
+def test_sentinel_and_future_timestamps_are_unknown_not_epoch_ages(invalid_time: str) -> None:
+    raw = _quote("NSE:INFY", 1500)
+    raw["timestamp"] = invalid_time
+    adapter = KiteMarketDataAdapter(
+        _config("NSE:INFY"),
+        transport=_Transport({"status": "success", "data": {"NSE:INFY": raw}}),
+        clock=lambda: _NOW,
+    )
+    adapter.connect()
+    observation = adapter.poll()[0]
+    assert observation.exchange_time is None and observation.source_time is None
+    assert observation.event_time == _NOW
+    assert observation.quality is QualityStatus.DEGRADED
+    assert "receipt placeholder" in observation.note
+    assert "invalid_provider_timestamp" in adapter.source_health()["quality_faults"]
+
+
+def test_timestamp_quality_normalization_retains_original_payload_identity() -> None:
+    hashes = []
+    for timestamp in ("1970-01-01 00:00:00", "1970-01-02 00:00:00"):
+        raw = _quote("NSE:INFY", 1500)
+        raw["timestamp"] = timestamp
+        adapter = KiteMarketDataAdapter(
+            _config("NSE:INFY"),
+            transport=_Transport({"status": "success", "data": {"NSE:INFY": raw}}),
+            clock=lambda: _NOW,
+        )
+        adapter.connect()
+        hashes.append(adapter.poll()[0].payload_hash)
+    assert hashes[0] != hashes[1]
+
+
 def test_kite_adapter_rejects_non_successful_response_without_exposing_body() -> None:
     adapter = KiteMarketDataAdapter(
         _config("NSE:INFY"),

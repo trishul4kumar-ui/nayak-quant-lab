@@ -35,6 +35,9 @@ class MockBrokerAdapter:
     broker = "mock"
 
     def __init__(self, scenario: MockScenario = MockScenario.NORMAL) -> None:
+        from quantlab.data.policy import require_test_fixtures
+
+        require_test_fixtures("MockBrokerAdapter")
         self.scenario = scenario
         self._connected = False
         self._seq = 1

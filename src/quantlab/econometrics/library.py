@@ -4,8 +4,11 @@ from __future__ import annotations
 
 import numpy as np
 
+from quantlab.data.policy import require_test_fixtures
+
 
 def stationary_ar1(*, n: int, seed: int, phi: float = 0.4) -> list[float]:
+    require_test_fixtures("generated AR diagnostic series")
     rng = np.random.default_rng(seed)
     values = np.zeros(n, dtype=np.float64)
     shock = rng.normal(0.0, 1.0, size=n)
@@ -15,6 +18,7 @@ def stationary_ar1(*, n: int, seed: int, phi: float = 0.4) -> list[float]:
 
 
 def random_walk(*, n: int, seed: int) -> list[float]:
+    require_test_fixtures("generated random-walk diagnostic series")
     rng = np.random.default_rng(seed)
     return np.cumsum(rng.normal(0.0, 1.0, size=n)).tolist()
 
@@ -30,6 +34,7 @@ def cointegrated_pair(*, n: int, seed: int) -> tuple[list[float], list[float]]:
 def panel_toy(
     *, n_entity: int, n_time: int, seed: int
 ) -> tuple[list[float], list[float], list[str], list[str]]:
+    require_test_fixtures("generated panel diagnostic series")
     rng = np.random.default_rng(seed)
     y: list[float] = []
     x: list[float] = []

@@ -241,6 +241,9 @@ def waivers() -> list[WaiverRecord]:
 
 def default_passing_request() -> CertificationRequest:
     """Research-stage package with independent validation. Still not live."""
+    from quantlab.data.policy import require_test_fixtures
+
+    require_test_fixtures("seed passing release/certification evidence")
     return CertificationRequest(
         package_id="LIVE-CERT-PASS",
         owner_id="researcher-1",

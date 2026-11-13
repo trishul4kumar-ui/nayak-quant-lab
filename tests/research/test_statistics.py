@@ -71,10 +71,19 @@ def test_deflated_sharpe_underidentified() -> None:
     assert report.status is CheckResult.NOT_TESTED
 
 
-def test_deflated_sharpe_defined() -> None:
+def test_deflated_sharpe_is_not_manufactured_from_trial_count() -> None:
     report = deflated_sharpe(0.5, n_trials=5, n_periods=40)
-    assert report.status is CheckResult.PASS
-    assert report.deflated_sharpe is not None
+    assert report.status is CheckResult.NOT_TESTED
+    assert report.deflated_sharpe is None
+    assert report.naive_sharpe == 0.5
+    assert "trial Sharpe variance" in report.note
+
+
+def test_deflated_sharpe_does_not_replace_nonfinite_input_with_zero() -> None:
+    report = deflated_sharpe(float("nan"), n_trials=5, n_periods=40)
+    assert report.status is CheckResult.NOT_TESTED
+    assert report.deflated_sharpe is None
+    assert report.naive_sharpe is None
 
 
 def test_pbo_not_manufactured() -> None:

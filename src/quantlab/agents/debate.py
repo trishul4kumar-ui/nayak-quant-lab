@@ -9,6 +9,7 @@ from collections.abc import Callable
 from datetime import UTC, datetime
 
 from quantlab.agents.bear import bear_mandate
+from quantlab.agents.budget_scopes import DESK_RESEARCH_FAMILY
 from quantlab.agents.bull import bull_mandate
 from quantlab.agents.context import FrozenHistory, FrozenSnapshot, validate_context
 from quantlab.agents.contracts import (
@@ -479,6 +480,7 @@ class DebateWorker:
         )
         return StructuredRequest(
             run_id=session.debate_id,
+            budget_family_id=DESK_RESEARCH_FAMILY,
             sections=prompt_sections(
                 mandate,
                 context,

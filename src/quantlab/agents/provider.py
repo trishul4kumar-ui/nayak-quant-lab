@@ -19,9 +19,15 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 from quantlab.agents.contracts import AgentModelIdentity
 from quantlab.agents.errors import AgentProviderError
 from quantlab.agents.hashing import digest
+from quantlab.agents.provider_budget import ProviderBudgetLedger, ProviderBudgetPolicy
 from quantlab.agents.repository import AgentRepository
 
 T = TypeVar("T", bound=BaseModel)
+
+# These are transport ceilings, not estimates of the provider's actual usage
+# or financial cost. Individual desk roles can and do impose lower limits.
+MAX_OUTPUT_TOKENS_PER_ATTEMPT = 6000
+MAX_REQUEST_CHARACTERS = 128000
 
 
 @dataclass(frozen=True)
@@ -31,6 +37,7 @@ class StructuredRequest:
     schema_json: str
     timeout_seconds: float = 30.0
     max_output_tokens: int = 2000
+    budget_family_id: str | None = None
 
     def prompt_hash(self) -> str:
         return digest({"sections": self.sections, "schema": self.schema_json})
@@ -326,9 +333,22 @@ def configured_provider() -> AgentModelProvider:
 
 
 class ProviderRunner:
-    def __init__(self, provider: AgentModelProvider, repository: AgentRepository) -> None:
+    def __init__(
+        self,
+        provider: AgentModelProvider,
+        repository: AgentRepository,
+        *,
+        budget_policy: ProviderBudgetPolicy | None = None,
+        require_budget: bool = False,
+    ) -> None:
+        if type(require_budget) is not bool:
+            raise ValueError("require_budget must be a boolean")
         self.provider, self.repository = provider, repository
         self._slot = threading.BoundedSemaphore(1)
+        self._budget = ProviderBudgetLedger(repository)
+        self._require_budget = require_budget
+        if budget_policy is not None:
+            self._budget.configure(budget_policy)
 
     def generate(
         self,
@@ -338,18 +358,24 @@ class ProviderRunner:
         cancel: threading.Event | None = None,
         schema_retries: int = 1,
     ) -> T:
-        if not 0 <= schema_retries <= 2 or not 0 < request.timeout_seconds <= 120:
+        if (
+            type(schema_retries) is not int
+            or not 0 <= schema_retries <= 2
+            or type(request.max_output_tokens) is not int
+            or not 0 < request.max_output_tokens <= MAX_OUTPUT_TOKENS_PER_ATTEMPT
+            or not 0 < request.timeout_seconds <= 120
+            or not request.run_id.strip()
+            or (
+                len(request.schema_json)
+                + sum(len(name) + len(value) for name, value in request.sections)
+                > MAX_REQUEST_CHARACTERS
+            )
+        ):
             raise AgentProviderError("INVALID_PROVIDER_BUDGET")
         deadline = time.monotonic() + request.timeout_seconds
         for attempt in range(schema_retries + 1):
             if cancel is not None and cancel.is_set():
                 raise AgentProviderError("PROVIDER_CANCELLED")
-            self.repository.audit(
-                "PROVIDER_REQUESTED",
-                run_id=request.run_id,
-                now=datetime.now(UTC),
-                artifact_hash=request.prompt_hash(),
-            )
             raw = self._call(request, deadline, cancel, continuing=attempt > 0)
             # Hash only; do not persist or log the raw provider text.
             self.repository.audit(
@@ -405,7 +431,33 @@ class ProviderRunner:
             finally:
                 self._slot.release()
 
-        threading.Thread(target=invoke, daemon=True, name="quantlab-provider").start()
+        try:
+            if cancel is not None and cancel.is_set():
+                raise AgentProviderError("PROVIDER_CANCELLED")
+            if time.monotonic() >= deadline:
+                raise AgentProviderError("PROVIDER_TIMEOUT")
+            self._budget.reserve(
+                task_id=request.run_id,
+                family_id=request.budget_family_id,
+                output_cap=request.max_output_tokens,
+                prompt_hash=request.prompt_hash(),
+                require_policy=self._require_budget,
+            )
+            if cancel is not None and cancel.is_set():
+                raise AgentProviderError("PROVIDER_CANCELLED")
+            if time.monotonic() >= deadline:
+                raise AgentProviderError("PROVIDER_TIMEOUT")
+            self.repository.audit(
+                "PROVIDER_REQUESTED",
+                run_id=request.run_id,
+                now=datetime.now(UTC),
+                artifact_hash=request.prompt_hash(),
+                safe_code=f"OUTPUT_TOKEN_CAP_{request.max_output_tokens}",
+            )
+            threading.Thread(target=invoke, daemon=True, name="quantlab-provider").start()
+        except Exception:
+            self._slot.release()
+            raise
         while True:
             if cancel is not None and cancel.is_set():
                 raise AgentProviderError("PROVIDER_CANCELLED")

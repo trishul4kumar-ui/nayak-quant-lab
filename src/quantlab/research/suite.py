@@ -19,6 +19,7 @@ from quantlab.backtest.engine import (
 from quantlab.backtest.spec import ResearchBacktestSpec
 from quantlab.core.identifiers import InstrumentId
 from quantlab.domain.models import Instrument, OHLCVBar, Signal, StrategyContext
+from quantlab.domain.research import CheckResult
 from quantlab.market.state import build_cross_section
 from quantlab.math.annualization import DEFAULT_ANNUALIZATION
 from quantlab.math.metrics import sharpe, simple_returns
@@ -35,6 +36,7 @@ from quantlab.research.multiple_testing import (
     DeflatedSharpeReport,
     MultipleTestingReport,
     OverfittingReport,
+    cscv_overfitting,
     deflated_sharpe,
     evaluate_family,
     probability_of_backtest_overfitting,
@@ -74,6 +76,7 @@ class ValidationConfig(BaseModel):
     family_id: str = "cs_momentum"
     slippage_model: str = "none"
     slippage_bps: float = 0.0
+    cscv_blocks: int = 0  # Explicit opt-in; zero leaves PBO not tested.
 
 
 class WalkForwardEval(BaseModel):
@@ -192,14 +195,21 @@ def run_validation_suite(
     )
 
     p_values: list[float] = []
+    family_returns: list[tuple[list[datetime], list[float]]] = []
     for point in robustness.parameter_points:
         family_strategy = CrossSectionalMomentum(lookback=point.lookback, top_n=cfg.top_n)
         family_result = run_backtest(
             bars,
             family_strategy,
             firewall,
-            BacktestConfig(lookback=point.lookback, cost_bps=cfg.cost_bps, seed=cfg.seed),
+            BacktestConfig(
+                lookback=point.lookback,
+                cost_bps=cfg.cost_bps,
+                slippage_bps=cfg.slippage_bps,
+                seed=cfg.seed,
+            ),
         )
+        family_returns.append((family_result.dates[1:], simple_returns(family_result.equity_curve)))
         p_val = sign_flip_p_value(
             simple_returns(family_result.equity_curve), n_perm=cfg.n_perm, seed=cfg.seed
         )
@@ -217,6 +227,8 @@ def run_validation_suite(
         excess_kurtosis=result.metrics.get("excess_kurtosis", 0.0),
     )
     overfitting = probability_of_backtest_overfitting([], [])
+    if cfg.cscv_blocks:
+        overfitting = _family_cscv(family_returns, cfg.cscv_blocks)
 
     cost_20 = next((p for p in robustness.cost_points if p.cost_bps == 20.0), None)
     cost_ok = None if cost_20 is None else cost_20.total_return > 0.0
@@ -283,6 +295,38 @@ def run_validation_suite(
     if gate.outcome is GateOutcome.PROMOTED_TO_PAPER and data_kind == "synthetic":
         raise RuntimeError("synthetic results cannot be promoted")
     return result, report
+
+
+def _family_cscv(
+    family_returns: list[tuple[list[datetime], list[float]]], n_blocks: int
+) -> OverfittingReport:
+    """Align complete contiguous trial suffixes; never fill missing observations."""
+    if not family_returns or any(
+        not dates
+        or len(dates) != len(returns)
+        or any(left >= right for left, right in zip(dates[:-1], dates[1:], strict=True))
+        for dates, returns in family_returns
+    ):
+        return cscv_overfitting([], n_blocks=n_blocks)
+    first = max(dates[0] for dates, _ in family_returns)
+    aligned: list[tuple[list[datetime], list[float]]] = []
+    for dates, returns in family_returns:
+        start = next((i for i, date in enumerate(dates) if date >= first), len(dates))
+        aligned.append((dates[start:], returns[start:]))
+    reference = aligned[0][0]
+    if not reference or any(dates != reference for dates, _ in aligned):
+        return OverfittingReport(
+            n_trials=len(family_returns),
+            selection="cscv_max_mean_return",
+            pbo=None,
+            status=CheckResult.NOT_TESTED,
+            note="trial histories do not have identical contiguous aligned dates",
+            n_blocks=n_blocks,
+        )
+    report = cscv_overfitting([returns for _, returns in aligned], n_blocks=n_blocks)
+    if report.pbo is not None:
+        report.note += " Only the configured lookback family is included; other trials are unknown."
+    return report
 
 
 def evaluate_walk_forward(

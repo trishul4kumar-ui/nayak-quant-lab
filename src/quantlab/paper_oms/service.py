@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
+from quantlab.backtest.spec import config_hash
 from quantlab.capital.definitions import InvestmentDecision, TargetPortfolio
 from quantlab.domain.models import Side
 from quantlab.domain.research import IntegrityReport
@@ -101,6 +102,7 @@ def run_paper_oms(
     firewall: RiskFirewall | None = None,
     leaks: PaperOMSLeakFlags | None = None,
     execution_leaks: ExecutionLeakFlags | None = None,
+    persist_result: bool = True,
 ) -> PaperOMSResult:
     used = request or PaperOMSRequest()
     assert_paper_only(live_trading=used.live_trading)
@@ -111,7 +113,18 @@ def run_paper_oms(
     used_target = target or seed_target()
     used_account = account or seed_account(allow_short=used.allow_short)
     used_snapshot = snapshot or seed_snapshot()
-    put_account(used_account)
+    from quantlab.data.policy import fixtures_enabled, require_real_data
+
+    if not fixtures_enabled():
+        require_real_data(used.data_kind, source=used_snapshot.source)
+        require_real_data(used_decision.data_kind, source=used_snapshot.source)
+        require_real_data(used_snapshot.data_kind, source=used_snapshot.source)
+        if not used_snapshot.evidence_hashes:
+            raise PaperOMSError("MARKET_EVIDENCE_REQUIRED: select a frozen real market snapshot")
+        if used_decision.live_trading:
+            raise PaperOMSError("LIVE_DECISION_FORBIDDEN: paper simulation cannot route orders")
+    if persist_result:
+        put_account(used_account)
     if used_target.decision_id != used_decision.decision_id:
         flags = flags.model_copy(update={"target_mutation": True})
         raise PaperOMSError("target_mutation: target does not belong to this decision")
@@ -131,8 +144,9 @@ def run_paper_oms(
         snapshot_id=used_snapshot.snapshot_id,
         execution_policy_id=policy.policy_id,
         plan_hash=plan.order_plan_hash,
+        account_state_hash=config_hash(used_account.model_dump(mode="json")),
     )
-    existing = lookup_idempotency(key)
+    existing = lookup_idempotency(key) if persist_result else None
     if existing is not None:
         cached = get_result(existing.oms_run_id)
         if cached is not None:
@@ -171,6 +185,7 @@ def run_paper_oms(
             0,
             used_snapshot.as_of,
             policy.random_seed,
+            opening_account_hash=config_hash(used_account.model_dump(mode="json")),
         )
         tca = tca_report(target_notional=0.0, fills=[], residual_notional=0.0)
         integrity = _integrity(flags, live_trading=False, data_kind=used.data_kind)
@@ -186,7 +201,7 @@ def run_paper_oms(
             note="No paper orders: abstain/reject/no-action.",
         )
         del integrity
-        return put_result(result, idempotency=key)
+        return put_result(result, idempotency=key) if persist_result else result
 
     for instruction in plan.instructions:
         order = order_from_instruction(
@@ -366,6 +381,7 @@ def run_paper_oms(
         len(fills),
         used_snapshot.as_of,
         policy.random_seed,
+        opening_account_hash=config_hash(used_account.model_dump(mode="json")),
     )
     result = PaperOMSResult(
         run=run,
@@ -382,7 +398,7 @@ def run_paper_oms(
         live_trading=False,
     )
     del integrity
-    return put_result(result, idempotency=key)
+    return put_result(result, idempotency=key) if persist_result else result
 
 
 def _freeze_run(
@@ -398,12 +414,14 @@ def _freeze_run(
     fill_count: int,
     as_of: datetime,
     seed: int,
+    opening_account_hash: str = "",
 ) -> OMSRun:
     run = OMSRun(
         oms_run_id="",
         decision_hash=decision.decision_hash,
         snapshot_id=snapshot.snapshot_id,
         account_id=account.account_id,
+        opening_account_hash=opening_account_hash,
         execution_policy_id=policy_id,
         started_at=as_of,
         completed_at=as_of,

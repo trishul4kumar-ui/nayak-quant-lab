@@ -43,7 +43,9 @@ def last() -> ReconciliationReport | None:
 
 def get(report_id: str) -> ReconciliationReport | None:
     with _LOCK:
-        return last() if report_id in {"", "last"} else _REPORTS.get(report_id)
+        if report_id in {"", "last"}:
+            return _REPORTS[_ORDER[-1]] if _ORDER else None
+        return _REPORTS.get(report_id)
 
 
 def history() -> list[ReconciliationReport]:

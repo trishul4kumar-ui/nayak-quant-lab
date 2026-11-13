@@ -101,6 +101,9 @@ def default_uncertified_release(*, as_of: datetime) -> StrategyRelease:
 
 
 def synthetic_research_release(*, as_of: datetime) -> StrategyRelease:
+    from quantlab.data.policy import require_test_fixtures
+
+    require_test_fixtures("synthetic strategy release")
     return StrategyRelease(
         release_id="rel-synthetic-research",
         strategy_id="synthetic-equal-weight",

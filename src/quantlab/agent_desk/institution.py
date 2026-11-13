@@ -34,6 +34,7 @@ from quantlab.agent_desk.institution_models import (
 from quantlab.agent_desk.models import DailyDeskState
 from quantlab.agents.analyst_worker import evidence_status
 from quantlab.agents.bear import BearWorker, create_bear_context
+from quantlab.agents.budget_scopes import DESK_RESEARCH_FAMILY
 from quantlab.agents.bull import BullWorker, create_bull_context
 from quantlab.agents.context import FrozenHistory, FrozenSnapshot
 from quantlab.agents.contracts import (
@@ -763,6 +764,7 @@ class InstitutionDeskService:
             policy += " Return exactly ONE claim of at most 140 characters with ONE citation."
         request = StructuredRequest(
             run_id=run_id,
+            budget_family_id=DESK_RESEARCH_FAMILY,
             sections=(
                 ("SYSTEM", policy),
                 ("HOST ASSIGNMENT", task),

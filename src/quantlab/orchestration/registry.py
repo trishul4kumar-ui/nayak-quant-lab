@@ -2,6 +2,11 @@
 
 from __future__ import annotations
 
+from typing import TypeVar
+
+from pydantic import BaseModel
+
+from quantlab.backtest.spec import config_hash
 from quantlab.orchestration.contracts import ResearchStatus
 from quantlab.orchestration.errors import OrchestrationError
 from quantlab.orchestration.family import ResearchFamily
@@ -16,6 +21,9 @@ from quantlab.orchestration.search_space import SearchSpace
 from quantlab.orchestration.specification import ResearchPlan, ResearchSpec
 from quantlab.orchestration.status import transition
 
+_Model = TypeVar("_Model", bound=BaseModel)
+_Key = str | tuple[str, str]
+
 
 class OrchestrationRegistry:
     def __init__(self) -> None:
@@ -25,6 +33,7 @@ class OrchestrationRegistry:
         self._specs: dict[tuple[str, str], ResearchSpec] = {}
         self._plans: dict[str, ResearchPlan] = {}
         self._finalized: set[tuple[str, str]] = set()
+        self._hashes: dict[tuple[str, _Key], str] = {}
         for hypothesis in seed_hypotheses():
             self.register_hypothesis(hypothesis)
         for space in seed_search_spaces():
@@ -34,23 +43,36 @@ class OrchestrationRegistry:
         for spec in seed_specs():
             self.register_spec(spec)
 
+    def _snapshot(self, namespace: str, key: _Key, value: _Model) -> _Model:
+        snapshot = value.model_copy(deep=True)
+        self._hashes[(namespace, key)] = config_hash(snapshot.model_dump(mode="json"))
+        return snapshot
+
+    def _verified_copy(self, namespace: str, key: _Key, value: _Model) -> _Model:
+        expected = self._hashes.get((namespace, key))
+        if expected is None or expected != config_hash(value.model_dump(mode="json")):
+            raise OrchestrationError(f"registered {namespace} integrity mismatch: {key}")
+        return value.model_copy(deep=True)
+
     def register_hypothesis(self, spec: HypothesisSpec) -> None:
         key = (spec.hypothesis_id, spec.version)
         if key in self._hypotheses:
             raise OrchestrationError(
                 f"cannot overwrite hypothesis {spec.hypothesis_id}@{spec.version}"
             )
-        self._hypotheses[key] = spec
+        self._hypotheses[key] = self._snapshot("hypothesis", key, spec)
 
     def register_search_space(self, space: SearchSpace) -> None:
         if space.search_space_id in self._spaces:
             raise OrchestrationError(f"cannot overwrite search space {space.search_space_id}")
-        self._spaces[space.search_space_id] = space
+        self._spaces[space.search_space_id] = self._snapshot(
+            "search_space", space.search_space_id, space
+        )
 
     def register_family(self, family: ResearchFamily) -> None:
         if family.family_id in self._families:
             raise OrchestrationError(f"cannot overwrite family {family.family_id}")
-        self._families[family.family_id] = family
+        self._families[family.family_id] = self._snapshot("family", family.family_id, family)
 
     def register_spec(self, spec: ResearchSpec) -> None:
         key = (spec.experiment_id, spec.experiment_version)
@@ -58,12 +80,13 @@ class OrchestrationRegistry:
             raise OrchestrationError(
                 f"cannot overwrite experiment {spec.experiment_id}@{spec.experiment_version}"
             )
-        self._specs[key] = spec
+        self._specs[key] = self._snapshot("spec", key, spec)
 
     def finalize(self, experiment_id: str, version: str) -> None:
         key = (experiment_id, version)
         if key not in self._specs:
             raise OrchestrationError(f"unknown experiment {experiment_id}@{version}")
+        self._verified_copy("spec", key, self._specs[key])
         self._finalized.add(key)
 
     def assert_not_finalized(self, experiment_id: str, version: str) -> None:
@@ -75,59 +98,65 @@ class OrchestrationRegistry:
     def put_plan(self, plan: ResearchPlan) -> None:
         existing = self._plans.get(plan.plan_id)
         if existing is not None:
-            if existing.identity_hash() != plan.identity_hash():
+            verified = self._verified_copy("plan", plan.plan_id, existing)
+            if verified.identity_hash() != plan.identity_hash():
                 raise OrchestrationError(f"cannot overwrite plan {plan.plan_id}; bump version")
             return
-        self._plans[plan.plan_id] = plan
+        self._plans[plan.plan_id] = self._snapshot("plan", plan.plan_id, plan)
 
     def get_hypothesis(self, hypothesis_id: str, version: str | None = None) -> HypothesisSpec:
         if version is not None:
             found = self._hypotheses.get((hypothesis_id, version))
             if found is None:
                 raise OrchestrationError(f"unknown hypothesis {hypothesis_id}@{version}")
-            return found
-        versions = [h for h in self._hypotheses.values() if h.hypothesis_id == hypothesis_id]
-        if not versions:
+            return self._verified_copy("hypothesis", (hypothesis_id, version), found)
+        keys = [key for key in self._hypotheses if key[0] == hypothesis_id]
+        if not keys:
             raise OrchestrationError(f"unknown hypothesis {hypothesis_id}")
-        return versions[-1]
+        key = keys[-1]
+        return self._verified_copy("hypothesis", key, self._hypotheses[key])
 
     def get_family(self, family_id: str) -> ResearchFamily:
         if family_id not in self._families:
             raise OrchestrationError(f"unknown family {family_id}")
-        return self._families[family_id]
+        return self._verified_copy("family", family_id, self._families[family_id])
 
     def get_search_space(self, search_space_id: str) -> SearchSpace:
         if search_space_id not in self._spaces:
             raise OrchestrationError(f"unknown search space {search_space_id}")
-        return self._spaces[search_space_id]
+        return self._verified_copy("search_space", search_space_id, self._spaces[search_space_id])
 
     def get_spec(self, experiment_id: str, version: str | None = None) -> ResearchSpec:
         if version is not None:
             found = self._specs.get((experiment_id, version))
             if found is None:
                 raise OrchestrationError(f"unknown experiment {experiment_id}@{version}")
-            return found
-        versions = [s for s in self._specs.values() if s.experiment_id == experiment_id]
-        if not versions:
+            return self._verified_copy("spec", (experiment_id, version), found)
+        keys = [key for key in self._specs if key[0] == experiment_id]
+        if not keys:
             raise OrchestrationError(f"unknown experiment {experiment_id}")
-        return versions[-1]
+        key = keys[-1]
+        return self._verified_copy("spec", key, self._specs[key])
 
     def get_plan(self, plan_id: str) -> ResearchPlan:
         if plan_id not in self._plans:
             raise OrchestrationError(f"unknown plan {plan_id}")
-        return self._plans[plan_id]
+        return self._verified_copy("plan", plan_id, self._plans[plan_id])
 
     def list_hypotheses(self) -> list[HypothesisSpec]:
-        return list(self._hypotheses.values())
+        return [self._verified_copy("hypothesis", key, value)
+                for key, value in self._hypotheses.items()]
 
     def list_families(self) -> list[ResearchFamily]:
-        return list(self._families.values())
+        return [self._verified_copy("family", key, value)
+                for key, value in self._families.items()]
 
     def list_specs(self) -> list[ResearchSpec]:
-        return list(self._specs.values())
+        return [self._verified_copy("spec", key, value) for key, value in self._specs.items()]
 
     def list_search_spaces(self) -> list[SearchSpace]:
-        return list(self._spaces.values())
+        return [self._verified_copy("search_space", key, value)
+                for key, value in self._spaces.items()]
 
     def set_hypothesis_status(
         self, hypothesis_id: str, status: ResearchStatus, *, version: str | None = None
@@ -135,8 +164,9 @@ class OrchestrationRegistry:
         current = self.get_hypothesis(hypothesis_id, version)
         transition(current.status, status)
         updated = current.model_copy(update={"status": status})
-        self._hypotheses[(updated.hypothesis_id, updated.version)] = updated
-        return updated
+        key = (updated.hypothesis_id, updated.version)
+        self._hypotheses[key] = self._snapshot("hypothesis", key, updated)
+        return updated.model_copy(deep=True)
 
 
 _DEFAULT = OrchestrationRegistry()

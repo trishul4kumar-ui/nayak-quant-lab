@@ -57,6 +57,9 @@ def get_policy(policy_id: str) -> CapitalPolicy:
 
 
 def seed_covariance() -> CovarianceReport:
+    from quantlab.data.policy import require_test_fixtures
+
+    require_test_fixtures("seed covariance/expected returns/liquidity")
     names = list(SEED_NAMES)
     matrix = [
         [0.0400, 0.0100, 0.0080],

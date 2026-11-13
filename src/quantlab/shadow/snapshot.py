@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
+from quantlab.backtest.spec import config_hash
 from quantlab.paper_oms.models import PaperAccount, PaperMarketSnapshot
 from quantlab.shadow.identity import hash_snapshot
 from quantlab.shadow.models import FrozenSnapshot, ShadowConfig
@@ -22,7 +23,7 @@ def freeze_snapshot(
     frozen = FrozenSnapshot(
         snapshot_id=snapshot.snapshot_id,
         snapshot_hash="",
-        market_data_hash=hashes.get("market", snapshot.snapshot_id),
+        market_data_hash=hashes.get("market", config_hash(snapshot.model_dump(mode="json"))),
         feature_snapshot_hash=hashes.get("feature", ""),
         factor_state_hash=hashes.get("factor", ""),
         regime_state_hash=hashes.get("regime", ""),
@@ -31,7 +32,7 @@ def freeze_snapshot(
         ensemble_state_hash=hashes.get("ensemble", ""),
         risk_state_hash=hashes.get("risk", ""),
         capital_policy_hash=hashes.get("capital", config.capital_policy),
-        portfolio_state_hash=hashes.get("portfolio", account.account_id),
+        portfolio_state_hash=hashes.get("portfolio", config_hash(account.model_dump(mode="json"))),
         execution_policy_hash=hashes.get("execution", config.execution_policy),
         configuration_hash=config.configuration_hash,
         as_of=snapshot.as_of,

@@ -6,6 +6,7 @@ from datetime import UTC, datetime, timedelta
 
 from quantlab.core.identifiers import InstrumentId
 from quantlab.core.time import PointInTime
+from quantlab.data.policy import require_test_fixtures
 from quantlab.domain.models import BarInterval, Instrument, OHLCVBar
 
 SEED_NAMES = ("RELIANCE", "TCS", "HDFCBANK", "INFY", "ICICIBANK")
@@ -18,6 +19,7 @@ class MemoryBarProvider:
         start: datetime | None = None,
         names: tuple[str, ...] = SEED_NAMES,
     ) -> None:
+        require_test_fixtures("MemoryBarProvider")
         self._start = start or datetime(2024, 1, 2, 10, 0, tzinfo=UTC)
         self._n_days = n_days
         self._instruments = [

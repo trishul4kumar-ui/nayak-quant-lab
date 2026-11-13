@@ -69,6 +69,8 @@ def idempotency_key(
     data_snapshot_hash: str,
     portfolio_state_hash: str,
     configuration_hash: str,
+    decision_hash: str = "",
+    target_hash: str = "",
 ) -> str:
     return _dump(
         {
@@ -77,5 +79,7 @@ def idempotency_key(
             "data_snapshot_hash": data_snapshot_hash,
             "portfolio_state_hash": portfolio_state_hash,
             "configuration_hash": configuration_hash,
+            "decision_hash": decision_hash,
+            "target_hash": target_hash,
         }
     )

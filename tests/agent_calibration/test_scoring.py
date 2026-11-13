@@ -3,7 +3,12 @@ from pathlib import Path
 
 import pytest
 
-from quantlab.agent_calibration.models import OutcomeStance, RealizedOutcome, ScoreStatus
+from quantlab.agent_calibration.models import (
+    CalibrationPolicy,
+    OutcomeStance,
+    RealizedOutcome,
+    ScoreStatus,
+)
 from quantlab.agent_calibration.repository import CalibrationRepository
 from quantlab.agent_calibration.scoring import score_agent
 from quantlab.agents.hashing import digest
@@ -52,6 +57,34 @@ def test_released_scorecard_is_reproducible_and_not_self_modifying() -> None:
 def test_future_outcome_is_rejected_to_prevent_leakage() -> None:
     with pytest.raises(ValueError, match="future"):
         score_agent((outcome(1),), as_of=NOW - timedelta(days=2, seconds=1))
+
+
+def test_outcome_recorded_after_cutoff_is_not_known_at_cutoff() -> None:
+    record = outcome(1)
+    with pytest.raises(ValueError, match="future realized outcome"):
+        score_agent((record,), as_of=NOW - timedelta(seconds=1))
+
+
+def test_duplicate_outcome_id_cannot_inflate_sample() -> None:
+    record = outcome(1)
+    changed = record.model_dump(exclude={"content_hash"})
+    changed["realized_return"] = -0.02
+    conflicting = RealizedOutcome.model_validate(changed)
+    with pytest.raises(ValueError, match="duplicate outcome"):
+        score_agent((record, conflicting), as_of=NOW)
+    with pytest.raises(ValueError, match="duplicate outcome"):
+        score_agent((record,) * 20, as_of=NOW)
+
+
+def test_policy_must_exist_at_scorecard_cutoff() -> None:
+    policy = CalibrationPolicy(
+        created_at=NOW + timedelta(seconds=1),
+        policy_id="future-policy",
+        minimum_sample_size=20,
+        bin_count=5,
+    )
+    with pytest.raises(ValueError, match="future calibration policy"):
+        score_agent((outcome(1),), as_of=NOW, policy=policy)
 
 
 def test_outcomes_and_scorecards_are_immutable_across_restart(tmp_path: Path) -> None:

@@ -216,10 +216,13 @@ def run_portfolio_experiment(
         n_experiments_in_family=family_size,
         used_ml=False,
         data_kind=data_kind,
-        pit_query_verified=True,
-        future_covariance=False,
-        future_ranking_universe=False,
-        feature_available_time_ok=True,
+        # This public path accepts arbitrary in-memory bars and instruments.
+        # Passing timestamp checks is not evidence of a verified PIT query,
+        # revision history, historical membership, or source provenance.
+        pit_query_verified=None,
+        future_covariance=None,
+        future_ranking_universe=None,
+        feature_available_time_ok=None,
         label_used_as_feature=False,
         future_normalization=False,
     )
@@ -254,6 +257,7 @@ def run_portfolio_experiment(
         statistical_status=ic.status,
         n_hypotheses=family_size,
         test_used_for_selection=False,
+        pit_evidence=integrity.checks["timestamp_leakage"],
     )
     report = PortfolioExperimentReport(
         portfolio_id=model.portfolio_id,

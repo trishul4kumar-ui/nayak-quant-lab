@@ -392,6 +392,11 @@ def evaluate_integrity(
     strategy_state_mismatch: bool | None = None,
     shadow_routing_attempt: bool | None = None,
 ) -> IntegrityReport:
+    from quantlab.data.policy import require_real_data
+
+    require_real_data(data_kind, source="research integrity inputs")
+    for bar in bars:
+        require_real_data(bar.data_kind, source="research bar " + bar.source_id)
     report = IntegrityReport()
 
     report.checks["look_ahead_bias"] = CheckResult.PASS if next_bar_fill else CheckResult.FAIL
@@ -407,9 +412,18 @@ def evaluate_integrity(
         if bar.pit.is_available_at(as_of)
     )
     pit_ok = state_ok and no_future_events
-    if pit_query_verified is False:
-        pit_ok = False
-    report.checks["timestamp_leakage"] = CheckResult.PASS if pit_ok else CheckResult.FAIL
+    has_temporal_evidence = bool(states) or bool(bars and as_of_times)
+    if not pit_ok or pit_query_verified is False:
+        timestamp_status = CheckResult.FAIL
+    elif pit_query_verified is None or not has_temporal_evidence:
+        timestamp_status = CheckResult.NOT_TESTED
+    else:
+        timestamp_status = CheckResult.PASS
+    report.checks["timestamp_leakage"] = timestamp_status
+    report.notes["timestamp_leakage"] = (
+        "PIT query assertion and temporal inputs are required; row timestamps alone "
+        "do not establish historical source or revision completeness"
+    )
 
     if cost_bps <= 0:
         report.checks["transaction_cost_underestimation"] = CheckResult.FAIL
@@ -452,7 +466,7 @@ def evaluate_integrity(
         report.notes["corporate_action_leakage"] = "no CA file; not a silent PASS"
 
     report.checks["selection_bias"] = CheckResult.NOT_TESTED
-    report.checks["feature_leakage"] = CheckResult.PASS if pit_ok else CheckResult.FAIL
+    report.checks["feature_leakage"] = timestamp_status
     report.checks["train_test_contamination"] = (
         CheckResult.NOT_TESTED if not used_ml else CheckResult.WARN
     )

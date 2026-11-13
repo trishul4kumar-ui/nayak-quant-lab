@@ -77,6 +77,7 @@ def idempotency_key(
     snapshot_id: str,
     execution_policy_id: str,
     plan_hash: str,
+    account_state_hash: str = "",
 ) -> str:
     return _dump(
         {
@@ -85,5 +86,6 @@ def idempotency_key(
             "snapshot_id": snapshot_id,
             "execution_policy_id": execution_policy_id,
             "plan_hash": plan_hash,
+            "account_state_hash": account_state_hash,
         }
     )

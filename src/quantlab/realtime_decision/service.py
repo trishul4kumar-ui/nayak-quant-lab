@@ -76,6 +76,17 @@ def run_realtime_decision(
     _reset_cycle()
     transition(DecisionState.VALIDATING)
     snap = frozen or freeze_snapshot(as_of=as_of)
+    from quantlab.data.policy import fixtures_enabled
+
+    if not fixtures_enabled():
+        manifest = str(snap.extras.get("source_manifest", ""))
+        if not manifest.startswith("production-observe-only:") or any(
+            row.source.lower().startswith(("mock", "synthetic"))
+            or row.provenance.lower().startswith(("mock", "synthetic"))
+            or not row.provenance
+            for row in snap.observations
+        ):
+            raise DecisionBlocked("REAL_OBSERVED_SNAPSHOT_REQUIRED: no synthetic decision inputs")
     bound = release or default_uncertified_release(as_of=snap.as_of)
     if actor is ActorKind.AI_SUGGESTION:
         transition(DecisionState.BLOCKED)

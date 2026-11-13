@@ -8,6 +8,8 @@ from typing import Any
 from quantlab.capital.memory import get_result as get_capital_result
 from quantlab.capital.memory import last_result as last_capital
 from quantlab.core.config import get_settings
+from quantlab.core.errors import DataIntegrityError
+from quantlab.data.policy import fixtures_enabled
 from quantlab.paper_oms.enums import EventType, OrderLifecycleState
 from quantlab.paper_oms.experiment import run_paper_experiment
 from quantlab.paper_oms.library import seed_account, seed_decision, seed_snapshot, seed_target
@@ -37,7 +39,11 @@ def _inputs(decision_id: str) -> tuple[Any, Any]:
     capital = get_capital_result(decision_id) if decision_id not in {"", "last"} else last_capital()
     if capital is not None:
         return capital.decision, capital.target
-    return seed_decision(), seed_target()
+    if fixtures_enabled():
+        return seed_decision(), seed_target()
+    raise DataIntegrityError(
+        "REVIEWED_DECISION_REQUIRED: prepare a selected real portfolio and paper input bundle"
+    )
 
 
 def list_payload() -> list[dict[str, Any]]:
@@ -73,26 +79,53 @@ def inspect_payload(run_id: str) -> dict[str, Any]:
     return payload
 
 
-def create_payload() -> dict[str, Any]:
-    account = put_account(seed_account())
+def create_payload(*, cash: float | None = None, account_id: str = "") -> dict[str, Any]:
+    if not fixtures_enabled():
+        from quantlab.app.paper_workflow import opening_paper_account
+
+        if cash is None or not account_id:
+            raise DataIntegrityError(
+                "PAPER_ACCOUNT_CONFIG_REQUIRED: provide an explicit account name and paper cash"
+            )
+        account = put_account(opening_paper_account(cash, account_id=account_id))
+    else:
+        account = put_account(seed_account())
     persist()
     return {
         "account_id": account.account_id,
         "cash": account.cash,
         "equity": account.equity,
         "live_trading": False,
-        "note": "Seed paper account created. Not a broker account.",
+        "note": "Explicit paper account created. Not a broker account or available broker cash.",
     }
 
 
-def plan_payload(decision_id: str, *, policy: str = "base") -> dict[str, Any]:
+def plan_payload(
+    decision_id: str,
+    *,
+    policy: str = "base",
+    workflow_id: str = "",
+    repository_path: Path | None = None,
+) -> dict[str, Any]:
     from quantlab.paper_oms.intent import intents_from_target
     from quantlab.paper_oms.planner import plan_orders
     from quantlab.paper_oms.policy import resolve_policy
 
-    decision, target = _inputs(decision_id)
-    account = get_account("PAPER-001") or seed_account()
-    snapshot = seed_snapshot()
+    if not fixtures_enabled():
+        from quantlab.agents.repository import AgentRepository
+        from quantlab.app.paper_workflow import load_workflow
+
+        repository = AgentRepository(repository_path)
+        try:
+            inputs = load_workflow(repository, workflow_id)
+        finally:
+            repository.close()
+        decision, target = inputs.decision, inputs.target
+        account, snapshot = inputs.opening_account, inputs.arrival.snapshot
+    else:
+        decision, target = _inputs(decision_id)
+        account = get_account("PAPER-001") or seed_account()
+        snapshot = seed_snapshot()
     intents = intents_from_target(decision, target, account, snapshot)
     plan = plan_orders(intents, account, snapshot, resolve_policy(policy))
     return {
@@ -115,9 +148,25 @@ def validate_payload(plan_id: str) -> dict[str, Any]:
     }
 
 
-def submit_payload(decision_id: str, *, policy: str = "base", ledger: str = "") -> dict[str, Any]:
+def submit_payload(
+    decision_id: str,
+    *,
+    policy: str = "base",
+    ledger: str = "",
+    workflow_id: str = "",
+    repository_path: Path | None = None,
+) -> dict[str, Any]:
     from quantlab.paper_oms.models import PaperOMSRequest
 
+    if not fixtures_enabled():
+        from quantlab.app.paper_workflow import run_selected_workflow
+
+        return run_selected_workflow(
+            "paper_oms",
+            workflow_id=workflow_id,
+            repository_path=repository_path,
+            ledger_path=_ledger_path(ledger),
+        )
     decision, target = _inputs(decision_id)
     result, run = run_paper_experiment(
         PaperOMSRequest(execution_policy_id=policy, decision_id=decision.decision_id),
@@ -308,6 +357,24 @@ def policy_rows() -> list[list[str]]:
 
 
 def last_run_row() -> dict[str, Any] | None:
+    if not fixtures_enabled():
+        from quantlab.app.paper_workflow import latest_workflow_result
+
+        result_payload = latest_workflow_result("paper_oms")
+        if result_payload is None:
+            return None
+        run = result_payload["run"]
+        return {
+            "id": run["oms_run_id"],
+            "status": run["status"],
+            "orders": run["order_count"],
+            "fills": run["fill_count"],
+            "recon": run["reconciliation_status"],
+            "hash": run["run_hash"],
+            "cash": result_payload["account"]["cash"],
+            "workflow_id": result_payload["workflow_id"],
+            "historical_replay": True,
+        }
     result = last_result()
     if result is None:
         return None

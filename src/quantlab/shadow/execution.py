@@ -20,6 +20,7 @@ def run_paper_execution(
     target: TargetPortfolio | None = None,
     account: PaperAccount | None = None,
     snapshot: PaperMarketSnapshot | None = None,
+    persist_result: bool = True,
 ) -> PaperOMSResult:
     return run_paper_oms(
         request or PaperOMSRequest(),
@@ -27,4 +28,5 @@ def run_paper_execution(
         target=target or seed_target(),
         account=account or seed_account(),
         snapshot=snapshot or seed_snapshot(),
+        persist_result=persist_result,
     )

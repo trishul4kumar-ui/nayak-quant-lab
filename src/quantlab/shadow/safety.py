@@ -6,6 +6,7 @@ import os
 
 from quantlab.core.config import LiveSafetyGates
 from quantlab.core.errors import LiveRouteAttempt, SafetyError, ShadowError
+from quantlab.paper_oms.safety import isolated_observation_credentials
 
 FORBIDDEN_CREDENTIAL_VARS = (
     "BROKER_PASSWORD",
@@ -25,13 +26,20 @@ def assert_live_trading_disabled(*, live_trading: bool = False) -> LiveSafetyGat
     gates = LiveSafetyGates()
     if live_trading or gates.live_trading or gates.live_trading_enabled:
         raise SafetyError("shadow engine refuses to run while live_trading is true")
-    if gates.broker_routing_enabled or gates.live_order_submission_enabled:
+    if (
+        gates.broker_routing_enabled
+        or gates.live_order_submission_enabled
+        or gates.broker_write_enabled
+    ):
         raise LiveRouteAttempt("shadow engine refuses broker routing flags")
     return gates
 
 
 def assert_no_broker_credentials() -> None:
-    present = [name for name in FORBIDDEN_CREDENTIAL_VARS if os.environ.get(name)]
+    isolated = isolated_observation_credentials()
+    present = [
+        name for name in FORBIDDEN_CREDENTIAL_VARS if name not in isolated and os.environ.get(name)
+    ]
     if present:
         raise ShadowError(
             "shadow fail-closed: broker/live credentials detected: " + ",".join(present)

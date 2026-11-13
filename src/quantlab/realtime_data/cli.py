@@ -32,7 +32,7 @@ def add_realtime_parser(sub: Any) -> None:
     cmd.add_parser("health", help="feed health")
     cmd.add_parser("status", help="connection status")
     cmd.add_parser("sources", help="adapter sources")
-    start_p = cmd.add_parser("start", help="start mock adapter")
+    start_p = cmd.add_parser("start", help="start configured real quote adapter")
     start_p.add_argument("--scenario", default="normal")
     cmd.add_parser("stop", help="stop adapter")
     cmd.add_parser("snapshot", help="freeze MarketState(T)")
@@ -52,7 +52,13 @@ def add_market_data_parser(sub: Any) -> None:
     parser = sub.add_parser("market-data", help="production-capable observe-only market data")
     cmd = parser.add_subparsers(dest="market_data_cmd", required=True)
     connect = cmd.add_parser("connect", help="connect configured production adapter")
-    connect.add_argument("--adapter", choices=("kite", "production", "mock"), default="production")
+    from quantlab.data.policy import fixtures_enabled
+
+    connect.add_argument(
+        "--adapter",
+        choices=("kite", "production", "mock") if fixtures_enabled() else ("kite", "production"),
+        default="production" if fixtures_enabled() else "kite",
+    )
     cmd.add_parser(
         "kite-login",
         help="open local Kite login and store a read-only access token",

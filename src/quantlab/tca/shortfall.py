@@ -53,10 +53,14 @@ def shortfall_from_fills(
             raise TCAError("wrong_side_slippage: buy improved vs benchmark")
         if fill.side is Side.SELL and slip < -1e-12:
             raise TCAError("wrong_side_slippage: sell improved vs benchmark")
-        trading += slip * fill.filled_quantity
+        explicit = fill.commission + fill.taxes + fill.fees
+        # Paper execution prices already contain spread, impact and configured
+        # explicit costs. Decompose the observed all-in displacement instead of
+        # adding those same components a second time.
+        trading += slip * fill.filled_quantity - fill.spread_cost - fill.impact_cost - explicit
         spread += fill.spread_cost
         impact += fill.impact_cost
-        fees += fill.commission + fill.taxes + fill.fees
+        fees += explicit
         delay += 0.0
         valid = True
     opportunity = None

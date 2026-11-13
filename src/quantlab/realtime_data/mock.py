@@ -22,6 +22,9 @@ class MockMarketDataAdapter:
     write_enabled = False
 
     def __init__(self, scenario: MockFeedScenario = MockFeedScenario.NORMAL) -> None:
+        from quantlab.data.policy import require_test_fixtures
+
+        require_test_fixtures("MockMarketDataAdapter")
         self.scenario = scenario
         self._connected = False
         self._cursor = 0
@@ -51,6 +54,9 @@ def seed_observations(
 
 
 def _seed_rows(scenario: MockFeedScenario) -> tuple[MarketObservation, ...]:
+    from quantlab.data.policy import require_test_fixtures
+
+    require_test_fixtures("seed market observations")
     if scenario is MockFeedScenario.MALFORMED:
         return (_observation("TCS", 1, None, SEED_AS_OF, QualityStatus.INVALID),)
     if scenario is MockFeedScenario.STALE:
