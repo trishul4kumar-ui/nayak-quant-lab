@@ -8,6 +8,7 @@ import time
 from collections.abc import Callable
 from datetime import UTC, datetime
 
+from quantlab.agents.budget_scopes import DESK_RESEARCH_FAMILY
 from quantlab.agents.context import FrozenHistory, create_context, validate_context
 from quantlab.agents.contracts import (
     AgentMandate,
@@ -34,6 +35,7 @@ from quantlab.agents.research import (
     AnalystResearchMemo,
     BullMemoDraft,
     BullResearchMemo,
+    CheckQuestion,
     EntryArchetype,
     EvidenceSection,
     FrozenResearchPlan,
@@ -186,6 +188,62 @@ class AnalystWorker:
     def host_uncertainties(self) -> tuple[str, ...]:
         return ()
 
+    def provider_budget(self, *, memo: bool) -> tuple[float, int]:
+        """Keep local Ollama memo generation bounded for an 8 GB research workstation.
+
+        This is a transport budget only. It never changes the evidence, schema,
+        tool, or execution-permission boundaries enforced by the host.
+        """
+        if self.provider.identity().provider == "ollama-local":
+            return (20.0 if memo else 60.0, 600 if memo else 1000)
+        return (30.0, 2400 if memo else 1000)
+
+    def local_timeout_draft_fields(self) -> dict[str, object]:
+        """Role-specific draft fields required for a local timeout abstention."""
+        return {}
+
+    def local_timeout_abstention(
+        self,
+        context: AgentRunContext,
+        plan: ResearchPlan,
+        results: list[AgentToolResult],
+    ) -> AnalystMemoDraft:
+        """Freeze a host-authored NO_TRADE record if a local memo cannot finish.
+
+        The LLM's validated plan and canonical result hashes remain available for
+        review.  This fallback must never turn an incomplete generation into a
+        candidate, a sizing decision, or an order instruction.
+        """
+        evidence_hashes = tuple(item.content_hash for item in results)
+        if not evidence_hashes:
+            raise AgentProviderError("LOCAL_TIMEOUT_WITHOUT_EVIDENCE")
+        answer = "Local memo generation timed out; deterministic validation remains required."
+        payload: dict[str, object] = {
+            "security_scope": context.security_scope,
+            "horizon": "unresolved pending deterministic validation",
+            "hypothesis": plan.hypothesis,
+            "economic_rationale": plan.rationale,
+            "evidence_for": (evidence_hashes[0],),
+            "evidence_against": (evidence_hashes[-1],),
+            "invalidation_conditions": (
+                "Reject until deterministic validation supplies sufficient evidence.",
+                "Reject if transaction-cost evidence remains incomplete.",
+            ),
+            "stance": "NO_TRADE",
+            "entry": "MORE_RESEARCH",
+            "exit": "MORE_RESEARCH",
+            "raw_confidence": 0.0,
+            "uncertainties": (
+                "Local model structured memo timed out before the bounded deadline.",
+            ),
+            "answers": tuple(
+                {"question": question.value, "answer": answer} for question in CheckQuestion
+            ),
+            "no_trade_reason": "LOCAL_MEMO_TIMEOUT_REQUIRES_MORE_RESEARCH",
+            **self.local_timeout_draft_fields(),
+        }
+        return self.draft_contract.model_validate(payload)
+
     def __init__(
         self,
         repository: AgentRepository,
@@ -322,14 +380,18 @@ class AnalystWorker:
             evidence = json.dumps(payload, sort_keys=True)
             if len(evidence) > 24000:
                 raise AgentProviderError("PROMPT_BUDGET_EXCEEDED")
+            timeout_seconds, max_output_tokens = self.provider_budget(
+                memo=plan is not None
+            )
             return StructuredRequest(
                 run_id=context.run_id,
+                budget_family_id=DESK_RESEARCH_FAMILY,
                 sections=prompt_sections(
                     mandate, context, task=task, untrusted_evidence_json=evidence
                 ),
                 schema_json=json.dumps(contract.model_json_schema()),
-                timeout_seconds=30,
-                max_output_tokens=1000 if plan is None else 2400,
+                timeout_seconds=timeout_seconds,
+                max_output_tokens=max_output_tokens,
             )
 
         memo: AnalystResearchMemo | None = None
@@ -398,7 +460,22 @@ class AnalystWorker:
                 plan,
             )
             prompt_hash = memo_request.prompt_hash()
-            draft = runner.generate(memo_request, self.draft_contract, cancel=cancel)
+            try:
+                draft = runner.generate(memo_request, self.draft_contract, cancel=cancel)
+            except AgentProviderError as failure:
+                if (
+                    str(failure) != "PROVIDER_TIMEOUT"
+                    or self.provider.identity().provider != "ollama-local"
+                ):
+                    raise
+                self.repository.audit(
+                    "LOCAL_MEMO_TIMEOUT_ABSTAINED",
+                    run_id=context.run_id,
+                    now=self.clock(),
+                    artifact_hash=frozen_plan.content_hash,
+                    safe_code="PROVIDER_TIMEOUT",
+                )
+                draft = self.local_timeout_abstention(context, plan, results)
             check()
             transition(AgentState.WRITING_MEMO, "Verify references and freeze research memo")
             memo = self._freeze(context, draft, screen, frozen_plan, results, mandatory_results)

@@ -10,7 +10,7 @@ from __future__ import annotations
 import json
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any, Protocol
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
@@ -188,7 +188,7 @@ class KiteMarketDataAdapter(ProductionMarketDataAdapter):
         received_at: datetime,
         incomplete_response: bool,
     ) -> MarketObservation:
-        quote_time = _parse_timestamp(raw.get("timestamp"))
+        quote_time = _parse_timestamp(raw.get("timestamp"), received_at=received_at)
         use_receipt_time = quote_time is None
         event_time = quote_time or received_at
         quote_age_seconds = (
@@ -215,8 +215,16 @@ class KiteMarketDataAdapter(ProductionMarketDataAdapter):
         note_parts = ["Kite REST /quote observation. Not a signal and not an order."]
         if use_receipt_time:
             note_parts.append(
-                "Provider quote timestamp missing; receipt time used and quality degraded."
+                "Provider quote timestamp missing or implausible; event time is a receipt "
+                "placeholder, not an observed exchange timestamp. Quality degraded."
             )
+            fault = (
+                "invalid_provider_timestamp"
+                if raw.get("timestamp")
+                else "missing_provider_timestamp"
+            )
+            if fault not in self._provider_faults:
+                self._provider_faults.append(fault)
         elif stale_quote:
             note_parts.append(
                 "Provider quote timestamp exceeds the configured maximum quote age; quality stale."
@@ -280,17 +288,26 @@ def _quote_payload(body: bytes) -> dict[str, Any]:
     return payload
 
 
-def _parse_timestamp(value: object) -> datetime | None:
+def _parse_timestamp(value: object, *, received_at: datetime | None = None) -> datetime | None:
     if not isinstance(value, str) or not value.strip():
         return None
     text = value.strip()
     try:
         parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
-    except ValueError:
+        if parsed.year < 2000:
+            return None
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=_IST)
+        parsed = parsed.astimezone(UTC)
+    except (ValueError, OverflowError):
         return None
-    if parsed.tzinfo is None:
-        parsed = parsed.replace(tzinfo=_IST)
-    return parsed.astimezone(UTC)
+    # Zero/epoch sentinels are absent clock evidence, not genuine multi-decade
+    # quote ages. Future clocks also cannot become a fresh observed quote.
+    if parsed < datetime(2000, 1, 1, tzinfo=UTC):
+        return None
+    if received_at is not None and parsed > received_at + timedelta(seconds=2):
+        return None
+    return parsed
 
 
 def _number(value: object) -> float | None:

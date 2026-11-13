@@ -41,6 +41,7 @@ def test_native_desk_inspectors_and_navigation(
         )
         QTest.mouseClick(refresh, Qt.MouseButton.LeftButton)
         page._visual.bridge.navigate("select_agent", "BEAR")
+        qapp.processEvents()
         assert page._tabs.currentIndex() == 1
         assert "No analyst runs" in page._inspectors["Bear"].toPlainText()
         assert not any("PLACE ORDER" in button.text() for button in page.findChildren(QPushButton))
@@ -101,6 +102,7 @@ def test_native_bull_run_history_and_evidence_navigation(
 
         evidence = json.loads(page._visual.bridge.presentation)["evidence"]
         page._visual.bridge.navigate("open_evidence", evidence[0]["artifact_hash"])
+        qapp.processEvents()
         assert page._bull.tabs.currentIndex() == 2
         assert evidence[0]["artifact_hash"] in page._bull.timeline.toPlainText()
         assert page._run_button.isEnabled() and not page._cancel_button.isEnabled()
@@ -153,6 +155,7 @@ def test_native_bear_run_history_evidence_and_panel_preferences(
         assert page._bear.tabs.currentIndex() == 0
         evidence = json.loads(page._visual.bridge.presentation)["evidence"]
         page._visual.bridge.navigate("open_evidence", evidence[0]["artifact_hash"])
+        qapp.processEvents()
         assert page._bear.tabs.currentIndex() == 2
         assert page._tabs.currentWidget() is page._bear
         assert evidence[0]["artifact_hash"] in page._bear.timeline.toPlainText()
@@ -217,9 +220,11 @@ def test_native_independent_memos_to_bounded_debate_and_evidence_navigation(
         debate = presentation["debate"]
         assert debate["adjudication"] == "NOT_EVALUATED" and debate["edges"]
         page._visual.bridge.navigate("open_debate", debate["transcript_hash"])
+        qapp.processEvents()
         assert page._tabs.currentWidget() is page._debate
         evidence = presentation["evidence"][0]["artifact_hash"]
         page._visual.bridge.navigate("open_evidence", evidence)
+        qapp.processEvents()
         assert page._tabs.currentWidget() in {page._bull, page._bear}
         assert any(
             evidence in workspace.timeline.toPlainText() for workspace in page._workspaces.values()
@@ -243,6 +248,7 @@ def test_native_independent_memos_to_bounded_debate_and_evidence_navigation(
         assert decision["no_trade"] and not decision["execution_authority"]
         page._tabs.setCurrentWidget(page._bull)
         page._visual.bridge.navigate("open_adjudication", decision["decision_hash"])
+        qapp.processEvents()
         assert page._tabs.currentWidget() is page._adjudication
         page._adjudication.splitter.setSizes([320, 400])
         page._persist_workspace_layout()

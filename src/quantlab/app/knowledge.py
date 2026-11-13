@@ -42,6 +42,17 @@ def list_payload() -> list[dict[str, Any]]:
     ]
 
 
+def knowledge_overview() -> dict[str, Any]:
+    """Current graph counts are not counts from an arbitrary old frozen snapshot."""
+    graph = _graph()
+    return {
+        "nodes": len(graph.nodes),
+        "edges": len(graph.edges),
+        "snapshots": len(graph.snapshots),
+        "hash": graph.graph_hash(),
+    }
+
+
 def inspect_payload(item_id: str) -> dict[str, Any]:
     graph = _graph()
     hypo = find_hypothesis(graph, item_id)

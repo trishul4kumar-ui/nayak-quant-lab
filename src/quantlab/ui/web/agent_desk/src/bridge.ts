@@ -4,7 +4,11 @@ export type EvidenceEdge = {agent: "BULL" | "BEAR"; evidence_hash: string; relat
 export type DebateState = {transcript_hash: string; status: "COMPLETE" | "INCOMPLETE" | "STALE"; critiques: number; rebuttals: number; edges: EvidenceEdge[]; adjudication: "NOT_EVALUATED"};
 export type ComponentState = {role: "BULL" | "BEAR"; name: string; status: string; value: number | null; points: number};
 export type AdjudicationState = {decision_hash: string; transcript_hash: string; outcome: string; no_trade: boolean; bull_score: number; bear_score: number; blocker_count: number; expired: boolean; components: ComponentState[]; warnings: string[]; execution_authority: false};
-export type DeskDTO = {agents: AgentState[]; evidence: EvidenceNode[]; debate?: DebateState | null; adjudication?: AdjudicationState | null; safety: {ai_order_authority: false; live_trading: false}};
+export const DESK_ROLES = ["NAYAK", "SUPERVISOR", "BULL", "BEAR", "NEWS_DOCS", "QUANT", "RISK", "EXECUTION_MONITOR", "AUDIT"] as const;
+export type DeskRole = typeof DESK_ROLES[number];
+export type InstitutionalAgent = {role: DeskRole; label: string; status: string; task: string; report_hash: string | null; summary: string; evidence_count: number};
+export type InstitutionState = {agents: InstitutionalAgent[]; cycle_hash: string | null; summary: string; status: string; active_role?: DeskRole | null};
+export type DeskDTO = {agents: AgentState[]; evidence: EvidenceNode[]; debate?: DebateState | null; adjudication?: AdjudicationState | null; institution?: InstitutionState | null; safety: {ai_order_authority: false; live_trading: false}};
 type NativeBridge = {presentation: string; presentationChanged: {connect: (fn: (raw: string) => void) => void}; navigate: (intent: string, identity: string) => void};
 declare global {
   interface Window {
@@ -39,6 +43,19 @@ function parse(raw: string): DeskDTO | undefined {
       if (!Array.isArray(a.warnings) || a.warnings.length > 20 || !a.warnings.every(w => typeof w === "string")) return;
       if (!a.no_trade && (a.blocker_count > 0 || !["BULL_DOMINANT", "BEAR_DOMINANT"].includes(a.outcome))) return;
     }
+    if (dto.institution) {
+      const institution = dto.institution;
+      const hash = (value: unknown) => value === null || (typeof value === "string" && /^[a-f0-9]{64}$/.test(value));
+      const text = (value: unknown) => typeof value === "string" && value.length <= 6000;
+      if (!Array.isArray(institution.agents) || institution.agents.length > 9 || !hash(institution.cycle_hash) || !text(institution.summary) || !text(institution.status)) return;
+      if (institution.active_role != null && !DESK_ROLES.includes(institution.active_role)) return;
+      const seen = new Set<DeskRole>();
+      if (!institution.agents.every(agent => {
+        if (!DESK_ROLES.includes(agent.role) || seen.has(agent.role) || !text(agent.label) || !text(agent.status) || !text(agent.task) || !text(agent.summary) || !hash(agent.report_hash) || !Number.isInteger(agent.evidence_count) || agent.evidence_count < 0) return false;
+        seen.add(agent.role);
+        return true;
+      })) return;
+    }
     return dto;
   } catch { return; }
 }
@@ -53,6 +70,6 @@ export function connect(onState: (dto: DeskDTO) => void): void {
   });
 }
 
-export function navigate(intent: "select_agent" | "open_evidence" | "open_debate" | "open_adjudication", identity: string): void {
+export function navigate(intent: "select_role" | "select_agent" | "open_evidence" | "open_debate" | "open_adjudication", identity: string): void {
   bridge?.navigate(intent, identity);
 }

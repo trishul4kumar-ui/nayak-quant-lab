@@ -47,6 +47,7 @@ def reseal(artifact: Artifact, **updates):
 def role_evidence(role: AgentRole, *, strong: bool) -> RoleAdjudicationEvidence:
     values = {
         "integrity": 1,
+        "pit_evidence": None,
         "test_set_integrity": 1,
         "next_bar_fill": 1,
         "walk_forward_windows": 5,
@@ -146,6 +147,21 @@ def test_pure_determinism_and_non_execution_contract() -> None:
         reseal(first, execution_authority=True)
     with pytest.raises(ValidationError):
         reseal(first, quantity=10)
+
+
+def test_unverified_pit_evidence_cannot_pass_research_gate() -> None:
+    result = adjudicate(
+        change_metric(frame(), "pit_evidence", status=EvidenceStatus.NOT_TESTED),
+        default_adjudication_policy(),
+    )
+    assert result.no_trade
+    assert result.outcome is AdjudicationOutcome.INSUFFICIENT_DATA
+
+
+def test_missing_pit_measurement_has_no_gate_outcome() -> None:
+    evidence = role_evidence(AgentRole.BULL, strong=True)
+    legacy_rows = tuple(row for row in evidence.measurements if row.name != "pit_evidence")
+    assert freeze_gate_evidence(legacy_rows, DataKind.REAL, NOW).outcome is None
 
 
 @pytest.mark.parametrize(

@@ -1,9 +1,9 @@
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from quantlab.core.identifiers import InstrumentId
 from quantlab.core.time import PointInTime
 from quantlab.domain.models import OHLCVBar
-from quantlab.domain.research import CheckResult
+from quantlab.domain.research import CheckResult, IntegrityReport
 from quantlab.research.integrity import evaluate_integrity
 
 
@@ -17,6 +17,44 @@ def _bar(day: datetime) -> OHLCVBar:
         low=9,
         close=10,
     )
+
+
+def _pit_integrity(
+    bars: list[OHLCVBar], as_of_times: list[datetime], verified: bool | None
+) -> IntegrityReport:
+    return evaluate_integrity(
+        bars=bars,
+        states=[],
+        as_of_times=as_of_times,
+        next_bar_fill=True,
+        cost_bps=10.0,
+        slippage_model="none",
+        live_trading=False,
+        n_experiments_in_family=1,
+        used_ml=False,
+        pit_query_verified=verified,
+    )
+
+
+def test_unknown_pit_evidence_is_not_promoted_to_pass() -> None:
+    day = datetime(2024, 1, 2, tzinfo=UTC)
+    for report in (_pit_integrity([_bar(day)], [day], None), _pit_integrity([], [], True)):
+        assert report.checks["timestamp_leakage"] is CheckResult.NOT_TESTED
+        assert report.checks["feature_leakage"] is CheckResult.NOT_TESTED
+
+
+def test_asserted_pit_query_with_evidence_can_pass_temporal_check() -> None:
+    day = datetime(2024, 1, 2, tzinfo=UTC)
+    report = _pit_integrity([_bar(day)], [day], True)
+    assert report.checks["timestamp_leakage"] is CheckResult.PASS
+
+
+def test_failed_pit_query_or_future_event_fails_temporal_check() -> None:
+    day = datetime(2024, 1, 2, tzinfo=UTC)
+    assert _pit_integrity([_bar(day)], [day], False).checks["timestamp_leakage"] is CheckResult.FAIL
+    bad = _bar(day)
+    bad.pit.event_time = day + timedelta(days=1)
+    assert _pit_integrity([bad], [day], True).checks["timestamp_leakage"] is CheckResult.FAIL
 
 
 def test_zero_cost_fails() -> None:

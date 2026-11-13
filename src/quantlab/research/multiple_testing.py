@@ -7,11 +7,11 @@ from __future__ import annotations
 
 import math
 from enum import StrEnum
+from itertools import combinations
 
 from pydantic import BaseModel, Field
 
 from quantlab.domain.research import CheckResult
-from quantlab.research.statistics import normal_ppf
 
 
 class CorrectionMethod(StrEnum):
@@ -41,7 +41,7 @@ class MultipleTestingReport(BaseModel):
 
 class DeflatedSharpeReport(BaseModel):
     schema_version: str = "1"
-    naive_sharpe: float
+    naive_sharpe: float | None
     deflated_sharpe: float | None
     n_trials: int
     n_periods: int
@@ -56,6 +56,10 @@ class OverfittingReport(BaseModel):
     pbo: float | None
     status: CheckResult
     note: str = ""
+    n_blocks: int = 0
+    n_observations: int = 0
+    n_splits: int = 0
+    logits: list[float] = Field(default_factory=list)
 
 
 def benjamini_hochberg(p_values: list[float]) -> list[float]:
@@ -131,50 +135,25 @@ def deflated_sharpe(
     skew: float = 0.0,
     excess_kurtosis: float = 0.0,
 ) -> DeflatedSharpeReport:
-    """Bailey / López de Prado deflated Sharpe. Returns NOT_TESTED if under-identified."""
-    if n_trials < 2 or n_periods < 2:
-        return DeflatedSharpeReport(
-            naive_sharpe=sharpe,
-            deflated_sharpe=None,
-            n_trials=n_trials,
-            n_periods=n_periods,
-            status=CheckResult.NOT_TESTED,
-            note="need n_trials>=2 and n_periods>=2",
-        )
-    sr = sharpe
-    t = float(n_periods)
-    inside = (1.0 - skew * sr + (excess_kurtosis / 4.0) * sr * sr) / (t - 1.0)
-    if inside <= 0.0 or not math.isfinite(inside):
-        return DeflatedSharpeReport(
-            naive_sharpe=sharpe,
-            deflated_sharpe=None,
-            n_trials=n_trials,
-            n_periods=n_periods,
-            status=CheckResult.NOT_TESTED,
-            note="standard error of Sharpe is undefined for this sample",
-        )
-    se = math.sqrt(inside)
-    if se <= 0 or not math.isfinite(se):
-        return DeflatedSharpeReport(
-            naive_sharpe=sharpe,
-            deflated_sharpe=None,
-            n_trials=n_trials,
-            n_periods=n_periods,
-            status=CheckResult.NOT_TESTED,
-            note="standard error of Sharpe is undefined",
-        )
-    euler = 0.5772156649015329
-    expected_max = (1.0 - euler) * normal_ppf(1.0 - 1.0 / n_trials) + euler * normal_ppf(
-        1.0 - 1.0 / (n_trials * math.e)
-    )
-    dsr = (sr - expected_max) / se
+    """Do not calculate DSR without identified family and selection evidence.
+
+    This legacy interface lacks the variance of trial Sharpe estimates, an
+    independent/effective trial count and a verified selection record. The
+    supplied moment parameters are retained for compatibility only: they do
+    not identify a DSR by themselves. A former implementation emitted a
+    standardized statistic as though it were the probabilistic DSR.
+    """
     return DeflatedSharpeReport(
-        naive_sharpe=sharpe,
-        deflated_sharpe=dsr,
+        naive_sharpe=sharpe if math.isfinite(sharpe) else None,
+        deflated_sharpe=None,
         n_trials=n_trials,
         n_periods=n_periods,
-        status=CheckResult.PASS,
-        note="DSR is a multiple-testing-aware diagnostic, not a live-trading score",
+        status=CheckResult.NOT_TESTED,
+        note=(
+            "DSR unavailable: trial Sharpe variance, independent/effective trial "
+            "count, verified selection and identified return moments are required; "
+            "the current interface does not establish them"
+        ),
     )
 
 
@@ -192,12 +171,86 @@ def probability_of_backtest_overfitting(
             status=CheckResult.NOT_TESTED,
             note="PBO/CSCV needs at least 8 paired IS/OOS trials; not manufactured",
         )
-    best = max(range(n), key=lambda i: trial_is[i])
-    pbo = 1.0 if trial_oos[best] < 0 else 0.0
     return OverfittingReport(
         n_trials=n,
         selection="max_is_sharpe",
-        pbo=pbo,
+        pbo=None,
+        status=CheckResult.NOT_TESTED,
+        note="one pair of aggregate IS/OOS vectors cannot identify CSCV PBO",
+    )
+
+
+def cscv_overfitting(
+    trial_returns: list[list[float]], *, n_blocks: int = 8
+) -> OverfittingReport:
+    """Estimate selection PBO from aligned periodic returns using mean return.
+
+    Each row is a trial and each column the same ordered observation. Equal
+    contiguous blocks are recombined into every half/half split. OOS ties use
+    midranks; an IS winner tie is rejected rather than arbitrarily selected.
+    This is descriptive research evidence, not independent OOS validation.
+    """
+    n_trials = len(trial_returns)
+    n_observations = len(trial_returns[0]) if trial_returns else 0
+
+    def unavailable(reason: str) -> OverfittingReport:
+        return OverfittingReport(
+            n_trials=n_trials,
+            selection="cscv_max_mean_return",
+            pbo=None,
+            status=CheckResult.NOT_TESTED,
+            note=reason,
+            n_blocks=n_blocks,
+            n_observations=n_observations,
+        )
+
+    if n_trials < 2:
+        return unavailable("CSCV requires at least two complete trials")
+    if n_blocks < 4 or n_blocks > 16 or n_blocks % 2:
+        return unavailable("CSCV requires an even block count from 4 through 16")
+    if n_observations < n_blocks * 2 or n_observations % n_blocks:
+        return unavailable("CSCV requires equal blocks with at least two observations each")
+    if any(len(trial) != n_observations for trial in trial_returns):
+        return unavailable("CSCV requires the same observations for every trial")
+    if any(not math.isfinite(value) for trial in trial_returns for value in trial):
+        return unavailable("CSCV requires finite returns for every trial and observation")
+
+    block_size = n_observations // n_blocks
+    block_totals = [
+        [sum(trial[i * block_size : (i + 1) * block_size]) for i in range(n_blocks)]
+        for trial in trial_returns
+    ]
+    logits: list[float] = []
+    all_blocks = set(range(n_blocks))
+    for train_tuple in combinations(range(n_blocks), n_blocks // 2):
+        train = set(train_tuple)
+        test = all_blocks - train
+        is_scores = [sum(totals[i] for i in train_tuple) for totals in block_totals]
+        best = max(is_scores)
+        winners = [index for index, score in enumerate(is_scores) if score == best]
+        if len(winners) != 1:
+            return unavailable("CSCV IS selection has tied winners; no arbitrary winner chosen")
+        winner = winners[0]
+        oos_scores = [sum(totals[i] for i in sorted(test)) for totals in block_totals]
+        selected = oos_scores[winner]
+        less = sum(score < selected for score in oos_scores)
+        equal = sum(score == selected for score in oos_scores)
+        rank = less + (equal + 1) / 2.0
+        relative_rank = rank / (n_trials + 1)
+        logits.append(math.log(relative_rank / (1.0 - relative_rank)))
+
+    return OverfittingReport(
+        n_trials=n_trials,
+        selection="cscv_max_mean_return",
+        pbo=sum(value <= 0 for value in logits) / len(logits),
         status=CheckResult.WARN,
-        note="simplified PBO proxy (best-IS negative OOS). Full CSCV is future work.",
+        note=(
+            "CSCV mean-return selection diagnostic only; it is not independent OOS "
+            "validation or evidence of tradability. Results require aligned, complete "
+            "trial histories, and incomplete trial families bias the estimate."
+        ),
+        n_blocks=n_blocks,
+        n_observations=n_observations,
+        n_splits=len(logits),
+        logits=logits,
     )

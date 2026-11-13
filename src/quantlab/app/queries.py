@@ -2,17 +2,21 @@
 
 from __future__ import annotations
 
+import json
+import math
 from typing import Any
 
 from quantlab.app.bootstrap import ApplicationRuntime
-from quantlab.data.fabric.catalog import DatasetCatalog
+from quantlab.data.fabric.catalog import DatasetCatalog, DatasetRecord
 from quantlab.data.fabric.layout import FabricLayout
-from quantlab.data.providers.memory import MemoryBarProvider
+from quantlab.data.policy import fixtures_enabled
+from quantlab.data.providers.research import ResearchBarProvider
+from quantlab.domain.models import ExperimentRun
 from quantlab.market.state import build_market_state
 
 
 def market_rows() -> list[dict[str, Any]]:
-    provider = MemoryBarProvider(n_days=80)
+    provider = ResearchBarProvider(n_days=80)
     rows: list[dict[str, Any]] = []
     for inst in provider.get_instruments():
         series = provider.all_bars()[inst.id]
@@ -36,7 +40,7 @@ def market_rows() -> list[dict[str, Any]]:
 
 def market_close_series(instrument_id: str, *, n_days: int = 40) -> list[float]:
     """Close prices for sparkline charts in Market Lab."""
-    provider = MemoryBarProvider(n_days=n_days)
+    provider = ResearchBarProvider(n_days=n_days)
     series = next(
         (
             bars
@@ -50,10 +54,15 @@ def market_close_series(instrument_id: str, *, n_days: int = 40) -> list[float]:
     return [float(bar.close) for bar in series]
 
 
-def experiment_rows(runtime: ApplicationRuntime) -> list[dict[str, Any]]:
+def experiment_rows(
+    runtime: ApplicationRuntime, *, limit: int | None = 50, include_archived: bool = False
+) -> list[dict[str, Any]]:
     runs = runtime.ledger.list_runs()
+    if not include_archived and not fixtures_enabled():
+        runs = [run for run in runs if run.data_kind.lower() == "real"]
+    selected = runs if limit is None else runs[-limit:]
     rows: list[dict[str, Any]] = []
-    for run in reversed(runs[-50:]):
+    for run in reversed(selected):
         rows.append(
             {
                 "id": run.id,
@@ -68,17 +77,38 @@ def experiment_rows(runtime: ApplicationRuntime) -> list[dict[str, Any]]:
                 "dataset_id": run.dataset_id,
                 "data_kind": run.data_kind,
                 "gate_outcome": run.gate_outcome,
+                "dataset_version": run.dataset_version,
+                "universe": tuple(run.universe),
+                "strategy_id": run.strategy_id or run.name,
+                "interval": str(run.hyperparameters.get("interval", "unspecified")),
+                "cost_bps": run.transaction_cost_bps,
+                "slippage_model": run.slippage_model,
+                "test_period": run.test_period,
+                "research_type": run.research_type,
+                "validation_protocol": run.validation_protocol,
+                "parent_experiment_id": run.parent_experiment_id,
             }
         )
     return rows
 
 
-def fabric_catalog_rows(runtime: ApplicationRuntime) -> list[dict[str, Any]]:
+def _catalog_records(
+    runtime: ApplicationRuntime, *, include_archived: bool = False
+) -> list[DatasetRecord]:
     catalog = DatasetCatalog(FabricLayout(runtime.paths.fabric_dir))
     try:
         records = catalog.list_records()
     finally:
         catalog.close()
+    if not include_archived and not fixtures_enabled():
+        return [record for record in records if record.data_kind.value.lower() == "real"]
+    return records
+
+
+def fabric_catalog_rows(
+    runtime: ApplicationRuntime, *, include_archived: bool = False
+) -> list[dict[str, Any]]:
+    records = _catalog_records(runtime, include_archived=include_archived)
     rows: list[dict[str, Any]] = []
     for record in records:
         rows.append(
@@ -87,7 +117,7 @@ def fabric_catalog_rows(runtime: ApplicationRuntime) -> list[dict[str, Any]]:
                 "version": record.version,
                 "state": record.state.value,
                 "data_kind": record.data_kind.value,
-                "checksum": record.checksum[:16],
+                "checksum": record.checksum,
                 "source": record.source,
                 "calendar": record.calendar_version,
                 "ca_policy": record.corporate_action_policy,
@@ -99,16 +129,17 @@ def fabric_catalog_rows(runtime: ApplicationRuntime) -> list[dict[str, Any]]:
 def fabric_health_rows(runtime: ApplicationRuntime) -> list[dict[str, Any]]:
     layout = FabricLayout(runtime.paths.fabric_dir)
     layout.ensure()
-    catalog = DatasetCatalog(layout)
-    try:
-        records = catalog.list_records()
-    finally:
-        catalog.close()
+    records = _catalog_records(runtime)
+    all_records = _catalog_records(runtime, include_archived=True)
     quarantined = sum(1 for row in records if row.state.value == "quarantined")
     ready = sum(1 for row in records if row.state.value == "research_ready")
     return [
         {"name": "fabric_root", "value": str(layout.root)},
         {"name": "datasets", "value": str(len(records))},
+        {
+            "name": "archived_fixtures",
+            "value": str(sum(row.data_kind.value.lower() != "real" for row in all_records)),
+        },
         {"name": "research_ready", "value": str(ready)},
         {"name": "quarantined", "value": str(quarantined)},
         {"name": "raw_exists", "value": str(layout.raw.exists())},
@@ -117,33 +148,48 @@ def fabric_health_rows(runtime: ApplicationRuntime) -> list[dict[str, Any]]:
 
 
 def fabric_coverage_rows(runtime: ApplicationRuntime) -> list[dict[str, Any]]:
-    catalog = DatasetCatalog(FabricLayout(runtime.paths.fabric_dir))
-    try:
-        records = catalog.list_records()
-    finally:
-        catalog.close()
+    records = _catalog_records(runtime)
+
+    def count(value: str) -> int | None:
+        try:
+            number = int(value)
+        except ValueError:
+            return None
+        return number if number >= 0 else None
+
     return [
         {
             "dataset": f"{record.dataset_id}@{record.version}",
             "coverage": record.coverage,
             "kind": record.data_kind.value,
             "state": record.state.value,
+            "closed_bar_count": count(record.extra.get("closed_bar_count", "")),
+            "instrument_count": count(record.extra.get("instrument_count", "")),
+            "exploratory_ready": record.extra.get("exploratory_ready", "false"),
+            "historical_availability_verified": record.extra.get(
+                "historical_availability_verified", "false"
+            ),
+            "first_bar": record.extra.get("first_bar", ""),
+            "last_bar": record.extra.get("last_bar", ""),
         }
         for record in records
     ]
 
 
 def fabric_pit_status(runtime: ApplicationRuntime) -> dict[str, Any]:
-    layout = FabricLayout(runtime.paths.fabric_dir)
-    catalog = DatasetCatalog(layout)
-    try:
-        records = catalog.list_records()
-    finally:
-        catalog.close()
-    ready = [row for row in records if row.state.value == "research_ready"]
+    records = _catalog_records(runtime)
+    ready = [
+        row
+        for row in records
+        if row.state.value == "research_ready"
+        and (fixtures_enabled() or row.extra.get("historical_availability_verified") == "true")
+    ]
+    exploratory = [row for row in records if row.extra.get("exploratory_ready") == "true"]
     return {
         "datasets": len(records),
         "research_ready": len(ready),
+        "pit_verified": len(ready),
+        "exploratory_ready": len(exploratory),
         "note": (
             "Research-ready datasets may be queried with available_time <= as_of."
             if ready
@@ -275,12 +321,105 @@ def fabric_lineage_rows(runtime: ApplicationRuntime) -> list[dict[str, Any]]:
     return rows
 
 
-def last_validation_row(runtime: ApplicationRuntime) -> dict[str, Any] | None:
+def is_validation_run(run: ExperimentRun) -> bool:
+    """A job completion or NOT_TESTED gate is not a validation artifact.
+
+    Older validation runs predate research_type, but contain the actual protocol
+    output (including OOS window count). Preserve these without selecting an
+    arbitrary backtest whose gate happens to be non-empty.
+    """
+    return run.research_type.lower() == "validation" or (
+        bool(run.validation) and "oos_windows" in run.validation
+    )
+
+
+def selected_research_summary(runtime: ApplicationRuntime) -> dict[str, Any]:
+    """Project only explicitly selected, published artifacts from this exact input bundle.
+
+    Archived fixtures, unrelated latest runs and results whose publication failed
+    cannot create a Home milestone. Computation remains distinct from validation.
+    """
+    from quantlab.agents.repository import AgentRepository
+    from quantlab.app.market_backtest import FrozenMarketHistory
+    from quantlab.app.research_workbench import load_research_run
+
+    prefs = runtime.ui_settings.current
+    histories = tuple(prefs.research_history_hashes)
+    engines: dict[str, dict[str, Any]] = {}
+    unavailable: dict[str, str] = {}
+    if histories:
+        try:
+            if len(set(histories)) != len(histories):
+                unavailable["inputs"] = "Selected source history missing, corrupt or duplicated"
+            else:
+                repository = AgentRepository(runtime.artifact_repository_path)
+                try:
+                    for history_hash in histories:
+                        source = repository.get(history_hash, FrozenMarketHistory).verified()
+                        if source.content_hash != history_hash:
+                            raise ValueError("Selected source history identity mismatch")
+                finally:
+                    repository.close()
+        except Exception:
+            unavailable["inputs"] = "Selected source history missing, corrupt or unavailable"
+    for engine, result_hash in prefs.research_result_hashes.items():
+        if not histories or not result_hash or "inputs" in unavailable:
+            continue
+        try:
+            result = load_research_run(runtime.artifact_repository_path, result_hash)
+            if result.engine != engine or set(result.context.history_hashes) != set(histories):
+                unavailable[engine] = "Selected result does not match this input bundle"
+                continue
+        except Exception:
+            unavailable[engine] = "Selected result missing, corrupt or unpublished"
+            continue
+        report = json.loads(result.report_json)
+        engines[engine] = {
+            "run_id": result.run_id,
+            "result_hash": result.content_hash,
+            "specification": result.specification,
+            "data_kind": "REAL",
+            "input_tier": "EXPLORATORY",
+            "validation_state": "NOT_TESTED",
+            "gate_outcome": "NOT_TESTED",
+            "metrics": report.get("metrics", {}),
+            "metric_units": report.get("metric_units", {}),
+            "context": result.context.model_dump(mode="json"),
+        }
+    return {
+        "history_hashes": histories,
+        "engines": engines,
+        "unavailable": unavailable,
+        "selected_run_ids": tuple(row["run_id"] for row in engines.values()),
+        "status": "EXPLORATORY_COMPUTED" if engines else "NOT_COMPUTED",
+        "validation_state": "NOT_TESTED",
+        "execution_authority": False,
+    }
+
+
+def last_validation_row(
+    runtime: ApplicationRuntime,
+    *,
+    parent_run_id: str | None = None,
+    candidate_id: str | None = None,
+) -> dict[str, Any] | None:
     runs = runtime.ledger.list_runs()
-    gated = [run for run in runs if run.gate_outcome or run.validation]
-    run = gated[-1] if gated else (runs[-1] if runs else None)
+    gated = [run for run in runs if is_validation_run(run)]
+    if not fixtures_enabled():
+        gated = [run for run in gated if run.data_kind.lower() == "real"]
+    if parent_run_id is not None:
+        gated = [run for run in gated if run.parent_experiment_id == parent_run_id]
+    if candidate_id is not None:
+        gated = [run for run in gated if candidate_id in {run.genome_id, run.hypothesis_id}]
+    run = gated[-1] if gated else None
     if run is None:
         return None
+    try:
+        oos_sharpe = float(run.validation.get("oos_sharpe", ""))
+    except (TypeError, ValueError):
+        oos_sharpe = None
+    if oos_sharpe is not None and not math.isfinite(oos_sharpe):
+        oos_sharpe = None
     return {
         "id": run.id,
         "name": run.name,
@@ -290,8 +429,11 @@ def last_validation_row(runtime: ApplicationRuntime) -> dict[str, Any] | None:
         "config_hash": run.config_hash,
         "validation": run.validation,
         "gate_reasons": run.gate_reasons,
-        "sharpe": run.metrics.get("sharpe"),
+        "sharpe": oos_sharpe,
+        "full_sample_sharpe": run.metrics.get("sharpe"),
         "oos_windows": run.validation.get("oos_windows", ""),
+        "parent_experiment_id": run.parent_experiment_id,
+        "validation_protocol": run.validation_protocol,
     }
 
 
@@ -487,7 +629,7 @@ def last_cross_section_state_row() -> dict[str, Any] | None:
     from quantlab.features.engine import session_calendar
     from quantlab.regimes.snapshot import compute_snapshot
 
-    bars = MemoryBarProvider(n_days=80).all_bars()
+    bars = ResearchBarProvider(n_days=80).all_bars()
     dates = session_calendar(bars)
     if not dates:
         return None

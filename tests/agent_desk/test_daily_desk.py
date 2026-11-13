@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import UTC, date, datetime, timedelta
+from datetime import UTC, date, datetime, time, timedelta
 from pathlib import Path
 
 import pytest
@@ -21,7 +21,8 @@ from quantlab.agent_desk.policies import default_daily_desk_policy
 from quantlab.agent_desk.recovery import recover_desk
 from quantlab.agent_desk.repository import DailyDeskRepository
 from quantlab.agent_desk.service import DailyDeskService
-from quantlab.data.fabric.calendar import SourcedCalendar, WeekdayCalendar
+from quantlab.core.errors import DataIntegrityError
+from quantlab.data.fabric.calendar import SessionOverride, SourcedCalendar, WeekdayCalendar
 from quantlab.trade_candidates.builder import build_candidate
 
 NOW = datetime(2026, 10, 8, 4, 30, tzinfo=UTC)
@@ -71,6 +72,37 @@ def test_requires_sourced_calendar_and_honors_holiday() -> None:
     holiday = datetime(2026, 10, 9, 5, 0, tzinfo=UTC)
     assert classify_session(holiday, calendar()) is DeskSession.CLOSED
     assert phase_for_session(DeskSession.OPENING) is DeskPhase.OPENING_OBSERVATION
+
+
+def test_special_session_uses_explicit_hours() -> None:
+    day = date(2026, 10, 10)  # synthetic Saturday fixture
+    special = SourcedCalendar(
+        exchange="NSE", holidays=frozenset(), source="fixture", version="v1",
+        special_sessions=frozenset({day}),
+        special_hours=(SessionOverride(day, time(10), time(12)),),
+    )
+    assert (
+        classify_session(datetime(2026, 10, 10, 4, 30, tzinfo=UTC), special) is DeskSession.OPENING
+    )
+    assert (
+        classify_session(datetime(2026, 10, 10, 6, 20, tzinfo=UTC), special) is DeskSession.CLOSING
+    )
+    assert (
+        classify_session(datetime(2026, 10, 10, 6, 30, tzinfo=UTC), special)
+        is DeskSession.POST_MARKET
+    )
+
+
+def test_unknown_special_hours_do_not_use_normal_session() -> None:
+    day = date(2026, 10, 10)
+    special = SourcedCalendar(
+        exchange="NSE", holidays=frozenset(), source="fixture", version="v1",
+        special_sessions=frozenset({day}),
+    )
+    with pytest.raises(DataIntegrityError, match="hours are unavailable"):
+        classify_session(datetime(2026, 10, 10, 5, tzinfo=UTC), special)
+    with pytest.raises(ValueError, match="AWARE"):
+        classify_session(datetime(2026, 10, 10, 5), special)
 
 
 def test_budget_and_pause_bound_due_work() -> None:

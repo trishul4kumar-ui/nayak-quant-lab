@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import datetime
 
 from pydantic import BaseModel
 
+from quantlab.core.errors import DataIntegrityError
 from quantlab.core.identifiers import InstrumentId
 from quantlab.core.time import IST
 from quantlab.data.fabric.types import DataKind
@@ -62,10 +64,19 @@ class SymbolBinding(BaseModel):
     valid_to: datetime | None = None
 
 
+@dataclass(frozen=True)
+class _InstrumentRevision:
+    instrument: CanonicalInstrument
+    effective_time: datetime
+    available_time: datetime
+    source: str
+
+
 class InstrumentMaster:
     def __init__(self) -> None:
         self._by_id: dict[str, CanonicalInstrument] = {}
         self._bindings: list[SymbolBinding] = []
+        self._pit_revisions: list[_InstrumentRevision] = []
 
     def add(self, instrument: CanonicalInstrument) -> None:
         self._by_id[instrument.security_id] = instrument
@@ -75,6 +86,71 @@ class InstrumentMaster:
 
     def get(self, security_id: str) -> CanonicalInstrument | None:
         return self._by_id.get(security_id)
+
+    def add_pit_revision(
+        self,
+        instrument: CanonicalInstrument,
+        *,
+        effective_time: datetime,
+        available_time: datetime,
+        source: str,
+    ) -> None:
+        """Record an explicit historical master snapshot without changing current labels."""
+        instrument = CanonicalInstrument.model_validate(instrument.model_dump())
+        if (
+            not instrument.security_id.strip()
+            or not instrument.exchange.strip()
+            or not instrument.symbol.strip()
+            or not source.strip()
+            or effective_time.utcoffset() is None
+            or available_time.utcoffset() is None
+            or instrument.listing_date is None
+            or instrument.listing_date.utcoffset() is None
+            or (
+                instrument.delisting_date is not None
+                and instrument.delisting_date.utcoffset() is None
+            )
+        ):
+            raise DataIntegrityError(
+                "PIT instrument identity, listing, source and aware times required"
+            )
+        if (
+            instrument.delisting_date is not None
+            and instrument.delisting_date <= instrument.listing_date
+        ):
+            raise DataIntegrityError("instrument listing interval is invalid")
+        if instrument.status.lower() == "delisted" and instrument.delisting_date is None:
+            raise DataIntegrityError("delisted instrument requires a known delisting date")
+        revision = _InstrumentRevision(
+            instrument.model_copy(deep=True), effective_time, available_time, source
+        )
+        for previous in self._pit_revisions:
+            if (
+                previous.instrument.security_id == instrument.security_id
+                and previous.effective_time == effective_time
+                and previous.available_time == available_time
+            ):
+                if previous == revision:
+                    return
+                raise DataIntegrityError("conflicting PIT instrument revisions")
+        self._pit_revisions.append(revision)
+
+    def get_as_of(self, security_id: str, as_of: datetime) -> CanonicalInstrument | None:
+        """Return only a master revision both effective and available at the cutoff."""
+        if as_of.utcoffset() is None:
+            raise DataIntegrityError("instrument cutoff must be timezone-aware")
+        eligible = [
+            row for row in self._pit_revisions
+            if row.instrument.security_id == security_id
+            and row.effective_time <= as_of and row.available_time <= as_of
+        ]
+        if not eligible:
+            return None
+        latest = max((row.effective_time, row.available_time) for row in eligible)
+        selected = [row for row in eligible if (row.effective_time, row.available_time) == latest]
+        if len(selected) != 1:
+            raise DataIntegrityError("ambiguous PIT instrument revisions")
+        return selected[0].instrument.model_copy(deep=True)
 
     def resolve_symbol(self, symbol: str, as_of: datetime) -> CanonicalInstrument | None:
         needle = symbol.strip().upper()

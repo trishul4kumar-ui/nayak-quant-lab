@@ -4,10 +4,24 @@ from __future__ import annotations
 
 from pydantic import BaseModel, Field
 
+from quantlab.core.errors import DataIntegrityError
 from quantlab.data.fabric.catalog import DatasetRecord
 from quantlab.data.fabric.quality import DataQualityReport
 from quantlab.data.fabric.types import DataKind, DatasetState
 from quantlab.domain.research import CheckResult
+
+REQUIRED_RESEARCH_CHECKS = frozenset(
+    {
+        "source_known",
+        "checksum_recorded",
+        "schema_validated",
+        "timezone_defined",
+        "instrument_identity",
+        "ohlc_valid",
+        "pit_verified",
+        "provenance_complete",
+    }
+)
 
 
 class GateVerdict(BaseModel):
@@ -181,6 +195,25 @@ def evaluate_research_gate(
 
 
 def apply_gate_state(record: DatasetRecord, report: ResearchGateReport) -> DatasetRecord:
+    if (
+        report.dataset_id != record.dataset_id
+        or report.version != record.version
+        or report.data_kind is not record.data_kind
+    ):
+        raise DataIntegrityError("research gate report does not match dataset identity")
+    if report.research_ready:
+        by_name = {item.name: item for item in report.checks}
+        if (
+            len(by_name) != len(report.checks)
+            or not REQUIRED_RESEARCH_CHECKS.issubset(by_name)
+            or any(
+                not by_name[name].required or by_name[name].result is not CheckResult.PASS
+                for name in REQUIRED_RESEARCH_CHECKS
+                if name in by_name
+            )
+            or any(item.required and item.result is not CheckResult.PASS for item in report.checks)
+        ):
+            raise DataIntegrityError("research gate report has inconsistent readiness evidence")
     if record.state is DatasetState.QUARANTINED:
         return record
     state = DatasetState.RESEARCH_READY if report.research_ready else DatasetState.NOT_READY

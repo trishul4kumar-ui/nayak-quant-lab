@@ -149,6 +149,7 @@ def test_bounded_debate_shared_evidence_and_restart(tmp_path: Path) -> None:
     providers[AgentRole.BULL].request_tool = True
     transcript = DebateWorker(repository, providers, clock=lambda: NOW).run(session)
     assert transcript.status is DebateStatus.COMPLETE
+    assert {r.budget_family_id for p in providers.values() for r in p.requests} == {"desk:research"}
     assert len(transcript.critiques) == 2 and not transcript.rebuttals
     assert [p.calls for p in providers.values()] == [3, 3]
     assert not transcript.execution_authority

@@ -82,7 +82,10 @@ class PaperExecutionAdapter:
             arrival_price=arrival_price,
             execution_price=simulated.execution_price,
             gross_notional=simulated.quantity * simulated.execution_price,
-            commission=simulated.explicit_cost,
+            # ``fees`` is the one explicit-cost classification. The simulator
+            # embeds this friction in execution_price already; do not also
+            # classify the same amount as commission and double count in TCA.
+            commission=0.0,
             taxes=taxes_status_unspecified,
             fees=simulated.explicit_cost,
             spread_cost=simulated.spread_cost,

@@ -11,6 +11,7 @@ from pydantic import BaseModel
 
 from quantlab.core.config import get_settings
 from quantlab.core.errors import QuantLabError
+from quantlab.data.policy import fixtures_enabled
 from quantlab.shadow.audit import incidents
 from quantlab.shadow.enums import ShadowMode
 from quantlab.shadow.experiment import last_experiment_row, run_shadow_experiment
@@ -90,7 +91,27 @@ def inspect_payload(cycle_id: str) -> dict[str, Any]:
     return payload
 
 
-def run_payload(*, mode: str = "research_paper", ledger: str = "") -> dict[str, Any]:
+def run_payload(
+    *,
+    mode: str = "research_paper",
+    ledger: str = "",
+    workflow_id: str = "",
+    repository_path: Path | None = None,
+) -> dict[str, Any]:
+    if not fixtures_enabled():
+        from quantlab.app.paper_workflow import run_selected_workflow
+
+        if mode != "research_paper":
+            raise QuantLabError(
+                "HISTORICAL_RESEARCH_ONLY: this workflow does not grant "
+                "production shadow eligibility"
+            )
+        return run_selected_workflow(
+            "shadow",
+            workflow_id=workflow_id,
+            repository_path=repository_path,
+            ledger_path=_ledger_path(ledger),
+        )
     result, _row = run_shadow_experiment(
         ShadowRequest(mode=ShadowMode(mode)),
         ledger_path=_ledger_path(ledger),
@@ -311,6 +332,23 @@ def replay_payload(cycle_id: str) -> dict[str, Any]:
 
 
 def last_run_row() -> dict[str, str] | None:
+    if not fixtures_enabled():
+        from quantlab.app.paper_workflow import latest_workflow_result
+
+        payload = latest_workflow_result("shadow")
+        if payload is None:
+            return None
+        return {
+            "id": payload["cycle"]["cycle_id"],
+            "mode": payload["cycle"]["mode"],
+            "status": payload["cycle"]["status"],
+            "recon": str(payload["reconciliation"]["status"]),
+            "orders": str(len(payload["orders"])),
+            "fills": str(len(payload["fills"])),
+            "hash": payload["snapshot"]["snapshot_hash"],
+            "workflow_id": payload["workflow_id"],
+            "note": "Historical replay; simulated non-routable fills",
+        }
     return last_experiment_row()
 
 

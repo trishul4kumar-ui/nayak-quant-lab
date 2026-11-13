@@ -27,7 +27,13 @@ def test_synthetic_portfolio_cannot_promote(tmp_path: Path) -> None:
     assert report.gate.outcome is not GateOutcome.RESEARCH_CANDIDATE
     assert report.data_kind == "synthetic"
     assert report.integrity["synthetic_data"] == "warn"
-    assert report.integrity["future_covariance"] == "pass"
+    assert report.integrity["future_covariance"] == "not_tested"
+    assert report.integrity["timestamp_leakage"] == "not_tested"
+    assert report.integrity["future_ranking_universe"] == "not_tested"
+    assert any(
+        item.name == "pit_evidence" and item.result.value == "not_tested" and item.required
+        for item in report.gate.reasons
+    )
     assert report.integrity["survivorship_bias"] == "not_tested"
     assert not report.infeasible
     assert result is not None

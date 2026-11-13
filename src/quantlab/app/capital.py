@@ -11,6 +11,8 @@ from quantlab.capital.library import get_policy, list_policies
 from quantlab.capital.memory import get_decision, get_result, last_result, list_decisions
 from quantlab.capital.report import capital_report
 from quantlab.core.config import get_settings
+from quantlab.core.errors import DataIntegrityError
+from quantlab.data.policy import fixtures_enabled
 from quantlab.models.registry import ExperimentLedger
 
 
@@ -61,7 +63,31 @@ def validate_payload(policy_id: str) -> dict[str, Any]:
     }
 
 
-def allocate_named(portfolio_id: str = "mom20_topn", *, ledger: str = "") -> dict[str, Any]:
+def allocate_named(
+    portfolio_id: str = "mom20_topn",
+    *,
+    ledger: str = "",
+    research_result_hash: str = "",
+    opening_cash: float | None = None,
+    allow_unverified_liquidity: bool = False,
+    repository_path: Path | None = None,
+) -> dict[str, Any]:
+    if not fixtures_enabled():
+        from quantlab.app.paper_workflow import allocate_research_capital
+        from quantlab.app.paths import RuntimePaths
+
+        if opening_cash is None:
+            raise DataIntegrityError(
+                "EXPLICIT_RESEARCH_CAPITAL_REQUIRED: select a real portfolio and enter paper cash"
+            )
+        return allocate_research_capital(
+            repository_path=repository_path
+            or RuntimePaths.discover().database_dir / "agent_desk.sqlite",
+            ledger_path=_ledger_path(ledger),
+            research_result_hash=research_result_hash,
+            opening_cash=opening_cash,
+            allow_unverified_liquidity=allow_unverified_liquidity,
+        )
     result, run = run_named_allocation(
         ledger_path=_ledger_path(ledger),
         portfolio_id=portfolio_id,

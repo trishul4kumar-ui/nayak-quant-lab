@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
+from quantlab.core.errors import DataIntegrityError
 from quantlab.data.fabric.calendar import SourcedCalendar, WeekdayCalendar
 from quantlab.data.fabric.checksums import sha256_bytes
 from quantlab.data.fabric.corporate_actions import CorporateAction, apply_backward_splits
@@ -119,8 +120,8 @@ def test_split_without_available_time_not_applied() -> None:
         announcement_time=None,
         available_time=None,
     )
-    out = apply_backward_splits(bars, [action], as_of=datetime(2024, 2, 1, tzinfo=UTC))
-    assert out[0].close == 100.0
+    with pytest.raises(DataIntegrityError, match="availability is unknown"):
+        apply_backward_splits(bars, [action], as_of=datetime(2024, 2, 1, tzinfo=UTC))
 
 
 def test_sourced_calendar_requires_source() -> None:
@@ -174,15 +175,25 @@ def test_universe_as_of_not_today() -> None:
             listing_date=datetime(2024, 6, 1, tzinfo=UTC),
         )
     )
+    for item in master.all():
+        assert item.listing_date is not None
+        master.add_pit_revision(
+            item, effective_time=item.listing_date,
+            available_time=item.listing_date, source="fixture"
+        )
     uni = PointInTimeUniverse(
         "u",
         master,
         [
-            Membership(security_id="S:AAA", universe_id="u", valid_from=listed),
+            Membership(membership_id="aaa", security_id="S:AAA", universe_id="u",
+                       valid_from=listed, available_time=listed, source="synthetic_fixture"),
             Membership(
+                membership_id="new",
                 security_id="S:NEW",
                 universe_id="u",
                 valid_from=datetime(2024, 6, 1, tzinfo=UTC),
+                available_time=datetime(2024, 6, 1, tzinfo=UTC),
+                source="synthetic_fixture",
             ),
         ],
         version="1",
@@ -205,10 +216,18 @@ def test_delisted_remains_historically_queryable() -> None:
             delisting_date=delist,
         )
     )
+    for item in master.all():
+        assert item.listing_date is not None
+        master.add_pit_revision(
+            item, effective_time=item.listing_date,
+            available_time=item.listing_date, source="fixture"
+        )
     uni = PointInTimeUniverse(
         "u",
         master,
-        [Membership(security_id="S:BBB", universe_id="u", valid_from=listed, valid_to=delist)],
+        [Membership(membership_id="bbb", security_id="S:BBB", universe_id="u",
+                    valid_from=listed, valid_to=delist, available_time=listed,
+                    source="synthetic_fixture")],
         version="1",
     )
     before = uni.as_of(datetime(2024, 2, 1, tzinfo=UTC))

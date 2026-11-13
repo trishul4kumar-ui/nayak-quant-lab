@@ -116,6 +116,17 @@ class BearWorker(AnalystWorker):
             raise AgentContextError("BEAR_DRAFT_REQUIRED")
         return f"{draft.exposure}: research intent only; eligibility UNKNOWN"
 
+    def local_timeout_draft_fields(self) -> dict[str, object]:
+        return {
+            "exposure": "NO_VALID_EXPOSURE",
+            "squeeze_reversal_risks": (
+                "Local memo timeout prevents a squeeze or reversal assessment.",
+            ),
+            "liquidity_risks": (
+                "Local memo timeout prevents a liquidity assessment.",
+            ),
+        }
+
     def extra_evidence(self) -> dict[str, object]:
         return {"instrument_eligibility": "UNKNOWN", "existing_position": "NOT_TESTED"}
 

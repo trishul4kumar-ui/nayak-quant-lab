@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
+from queue import Empty, Queue
 
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtWidgets import (
@@ -22,6 +24,19 @@ from PySide6.QtWidgets import (
 )
 
 from quantlab.agent_calibration.models import AgentScorecard
+from quantlab.agent_desk.institution import (
+    DeskCycle,
+    InstitutionDeskService,
+    InstitutionDocument,
+    NayakAnswer,
+)
+from quantlab.agent_desk.institution_models import (
+    LABELS as INSTITUTION_LABELS,
+)
+from quantlab.agent_desk.institution_models import (
+    MANDATES as INSTITUTION_MANDATES,
+)
+from quantlab.agent_desk.institution_models import InstitutionRole
 from quantlab.agent_desk.models import DailyDeskState
 from quantlab.agent_desk.repository import DailyDeskRepository
 from quantlab.agent_desk.service import DailyDeskService
@@ -65,6 +80,7 @@ from quantlab.ui.widgets.agent_desk_webview import AgentDeskWebView
 from quantlab.ui.widgets.agent_performance_workspace import AgentPerformanceWorkspace
 from quantlab.ui.widgets.analyst_workspace import AnalystWorkspace
 from quantlab.ui.widgets.daily_desk_workspace import DailyDeskWorkspace
+from quantlab.ui.widgets.institution_workspace import InstitutionWorkspace
 from quantlab.ui.widgets.lab_shell import LabPageShell
 from quantlab.ui.widgets.position_review_workspace import PositionReviewWorkspace
 from quantlab.ui.widgets.trade_decision_console import TradeDecisionConsole
@@ -76,7 +92,7 @@ class AiQuantDeskPage(LabPageShell):
     def __init__(self, runtime: ApplicationRuntime) -> None:
         super().__init__(
             "AI Quant Desk",
-            subtitle="Bull / Bear · research contracts and evidence history",
+            subtitle="NAYAK · supervisor · seven research and operations agents",
             nayak_summary="Research permissions are enforced in code. Live authority stays with "
             "the existing human execution controls.",
         )
@@ -87,6 +103,12 @@ class AiQuantDeskPage(LabPageShell):
         self._history_path: Path | None = None
         self._job_id: str | None = None
         self._job_role = AgentRole.BULL
+        self._institution_kind: str | None = None
+        self._institution_cycle: DeskCycle | None = None
+        self._institution_answer: NayakAnswer | None = None
+        self._institution_progress: Queue[tuple[str, str, str]] = Queue()
+        self._institution_roles: dict[str, tuple[str, str]] = {}
+        self._documents: tuple[InstitutionDocument, ...] = ()
         self._debate_job = False
         self._active_debate_id: str | None = None
         self._selected_debate: str | None = None
@@ -96,7 +118,9 @@ class AiQuantDeskPage(LabPageShell):
         self._status.setWordWrap(True)
         self.body().addWidget(self._status)
         self._visual = AgentDeskWebView()
-        self._visual.bridge.navigationRequested.connect(self._visual_navigation)
+        self._visual.bridge.navigationRequested.connect(
+            self._visual_navigation, Qt.ConnectionType.QueuedConnection
+        )
         self.body().addWidget(self._visual)
         self._tabs = QTabWidget()
         self._tabs.setAccessibleName("AI desk foundation inspectors")
@@ -160,6 +184,12 @@ class AiQuantDeskPage(LabPageShell):
         self._daily_desk = DailyDeskWorkspace()
         self._daily_desk.pauseRequested.connect(self._pause_daily_research)
         self._tabs.addTab(self._daily_desk, "Daily Desk")
+        self._institution = InstitutionWorkspace()
+        self._institution.requestCycle.connect(self._run_institution)
+        self._institution.cancelRequested.connect(self._cancel_bull)
+        self._institution.questionAsked.connect(self._ask_nayak)
+        self._institution.documentLoadRequested.connect(self._load_documents)
+        self._tabs.addTab(self._institution, "NAYAK / Institution")
         for name in ("Permissions", "Tools", "Audit"):
             inspector = QTextBrowser()
             inspector.setOpenExternalLinks(False)
@@ -204,7 +234,10 @@ class AiQuantDeskPage(LabPageShell):
         self.refresh()
 
     def _visual_navigation(self, intent: str, identity: str) -> None:
-        if intent == "select_agent":
+        if intent == "select_role":
+            self._tabs.setCurrentWidget(self._institution)
+            self._institution.select_role(identity)
+        elif intent == "select_agent":
             self._tabs.setCurrentIndex(0 if identity == "BULL" else 1)
         elif intent == "open_debate":
             self._selected_debate = identity
@@ -243,6 +276,9 @@ class AiQuantDeskPage(LabPageShell):
             self._history_path = Path(filename)
         else:
             self._snapshot_path = Path(filename)
+        self._institution.set_input_status(
+            "Frozen history selected" if history else "Frozen market snapshot selected"
+        )
         for workspace in self._workspaces.values():
             workspace.task.setText(
                 "Input selected; scope, provenance and availability are checked on run."
@@ -250,6 +286,181 @@ class AiQuantDeskPage(LabPageShell):
 
     def _run_bull(self) -> None:
         self._run_analyst(AgentRole.BULL)
+
+    def open_nayak(self) -> None:
+        self._tabs.setCurrentWidget(self._institution)
+        self._institution.select_role("NAYAK")
+
+    def _load_documents(self) -> None:
+        filename, _ = QFileDialog.getOpenFileName(
+            self, "Load frozen news or documents", "", "JSON (*.json)"
+        )
+        if not filename:
+            return
+        try:
+            path = Path(filename)
+            if path.stat().st_size > 200_000:
+                raise ValueError("document input too large")
+            payload = json.loads(path.read_bytes())
+            if not isinstance(payload, list) or not 1 <= len(payload) <= 8:
+                raise ValueError("bounded document list required")
+            self._documents = tuple(InstitutionDocument.model_validate(row) for row in payload)
+            self._institution.set_input_status(
+                f"{len(self._documents)} frozen documents selected; availability checked on run"
+            )
+        except (OSError, ValueError, TypeError):
+            self._documents = ()
+            self._institution.set_error(
+                "Documents could not be verified. Load a JSON list with title, text, "
+                "available_at and created_at fields."
+            )
+
+    def _run_institution(self) -> None:
+        self._tabs.setCurrentWidget(self._institution)
+        if self._job_id:
+            self._institution.set_error("Finish or cancel the active desk job first.")
+            return
+        if not self._provider.health().configured:
+            self._institution.set_error(
+                "Configure the local Ollama provider before running the desk."
+            )
+            return
+        try:
+            snapshot = (
+                read_snapshot(self._snapshot_path) if self._snapshot_path else inspect_snapshot()
+            )
+            if snapshot is None:
+                self._institution.set_error(
+                    "Load a frozen market snapshot before running the desk."
+                )
+                return
+            now = datetime.now(UTC)
+            history = (
+                read_history(self._history_path, snapshot, now) if self._history_path else None
+            )
+            replay, documents = self._replay.isChecked(), self._documents
+        except (OSError, ValueError, KeyError):
+            self._institution.set_error("Selected research inputs could not be verified.")
+            return
+        self._institution_roles.clear()
+        while not self._institution_progress.empty():
+            self._institution_progress.get_nowait()
+
+        def work(job: Job) -> dict[str, object]:
+            repo = AgentRepository(self._repo_path)
+            try:
+                cycle = InstitutionDeskService(repo, self._provider).run(
+                    snapshot,
+                    now=now,
+                    replay=replay,
+                    history=history,
+                    documents=documents,
+                    cancel=job.cancel_event,
+                    progress=lambda event: self._institution_progress.put(
+                        (str(event["role"]), str(event["status"]), str(event["task"]))
+                    ),
+                )
+                return {"cycle_hash": cycle.content_hash}
+            finally:
+                repo.close()
+
+        self._start_institution_job("cycle", work)
+
+    def _ask_nayak(self, question: str) -> None:
+        if self._job_id:
+            self._institution.set_error(
+                "Wait for the active desk job to finish before asking NAYAK."
+            )
+            return
+        cycle = self._institution_cycle
+        if cycle is None:
+            self._institution.set_error("Run the institutional desk to create evidence for NAYAK.")
+            return
+
+        def work(job: Job) -> dict[str, object]:
+            repo = AgentRepository(self._repo_path)
+            try:
+                answer = InstitutionDeskService(repo, self._provider).ask(
+                    cycle.content_hash, question, now=datetime.now(UTC), cancel=job.cancel_event
+                )
+                return {"answer_hash": answer.content_hash}
+            finally:
+                repo.close()
+
+        self._start_institution_job("answer", work)
+
+    def _start_institution_job(self, kind: str, work: Callable[[Job], dict[str, object]]) -> None:
+        job = self.runtime.jobs.submit(f"institution_{kind}", work)
+        self._job_id, self._institution_kind = job.job_id, kind
+        self._debate_job = False
+        self._institution.set_busy(True)
+        for button in (self._run_button, self._bear_button, self._debate_button):
+            button.setEnabled(False)
+        self._cancel_button.setEnabled(True)
+        self._timer.start()
+
+    def _institution_presentation(self) -> dict[str, object]:
+        cycle = self._institution_cycle
+        roles = (
+            cycle.presentation()
+            if cycle
+            else [
+                {
+                    "role": role.value,
+                    "label": INSTITUTION_LABELS[role],
+                    "status": "IDLE",
+                    "task": INSTITUTION_MANDATES[role],
+                    "report_hash": None,
+                    "summary": "No frozen report yet.",
+                    "evidence_count": 0,
+                }
+                for role in InstitutionRole
+            ]
+        )
+        answer = self._institution_answer
+        roles.append(
+            {
+                "role": "NAYAK",
+                "label": "NAYAK",
+                "status": "WORKING"
+                if self._institution_kind == "answer"
+                else "IDLE"
+                if answer is None
+                else str(answer.status),
+                "task": "Interactive evidence review",
+                "report_hash": None if answer is None else answer.content_hash,
+                "summary": "Ask your desk about its frozen reports."
+                if answer is None
+                else answer.text,
+                "evidence_count": 0 if answer is None else len(answer.report_hashes),
+            }
+        )
+        for role in roles:
+            name = str(role["role"])
+            if name in self._institution_roles:
+                role["status"], role["task"] = self._institution_roles[name]
+        return {
+            "agents": roles,
+            "cycle_hash": cycle.content_hash if cycle else None,
+            "summary": cycle.summary
+            if cycle
+            else "Load a snapshot and run your institutional desk.",
+            "status": "RUNNING"
+            if self._institution_kind
+            else str(cycle.status)
+            if cycle
+            else "IDLE",
+            "active_role": "NAYAK"
+            if self._institution_kind == "answer"
+            else next(
+                (
+                    role
+                    for role, (status, _) in self._institution_roles.items()
+                    if status in {"RUNNING", "WORKING"}
+                ),
+                None,
+            ),
+        }
 
     def _run_analyst(self, role: AgentRole) -> None:
         workspace = self._workspaces[role]
@@ -323,11 +534,17 @@ class AiQuantDeskPage(LabPageShell):
         self._debate_button.setEnabled(False)
         self._cancel_button.setEnabled(True)
         workspace.task.setText("Queued · frozen context verified · RESEARCH ONLY")
+        self._institution.set_busy(True)
         self._timer.start()
 
     def _cancel_bull(self) -> None:
         if self._job_id:
             self.runtime.jobs.cancel(self._job_id)
+            if self._institution_kind:
+                self._institution.status.setText(
+                    "Cancellation requested; preserving frozen evidence."
+                )
+                return
             if self._debate_job:
                 self._debate_status.setText("Cancellation requested; no fabricated completion.")
                 return
@@ -384,6 +601,7 @@ class AiQuantDeskPage(LabPageShell):
             button.setEnabled(False)
         self._cancel_button.setEnabled(True)
         self._debate_status.setText("Queued · both initials frozen · bounded critique only")
+        self._institution.set_busy(True)
         self._timer.start()
 
     def _choose_debate(self, _: int) -> None:
@@ -521,7 +739,9 @@ class AiQuantDeskPage(LabPageShell):
             plans[-1] if plans else None,
         )
         if selected:
-            self._levels.history.setCurrentIndex(self._levels.history.findData(selected.content_hash))
+            self._levels.history.setCurrentIndex(
+                self._levels.history.findData(selected.content_hash)
+            )
             exit_policy = (
                 repository.get(selected.exit_policy_hash, ExitPolicy)
                 if selected.exit_policy_hash
@@ -644,6 +864,13 @@ class AiQuantDeskPage(LabPageShell):
                 repository.close()
 
     def refresh(self) -> None:
+        while True:
+            try:
+                role, status, message = self._institution_progress.get_nowait()
+            except Empty:
+                break
+            self._institution_roles[role] = (status, message)
+            self._institution.set_progress(role, status, message)
         if self._job_id:
             job = self.runtime.jobs.get(self._job_id)
             if job is None or job.status in {
@@ -651,12 +878,22 @@ class AiQuantDeskPage(LabPageShell):
                 JobStatus.FAILED,
                 JobStatus.CANCELLED,
             }:
+                institution_kind = self._institution_kind
+                self._institution_kind = None
                 self._job_id = None
                 self._timer.stop()
                 self._run_button.setEnabled(True)
                 self._bear_button.setEnabled(True)
                 self._debate_button.setEnabled(True)
                 self._cancel_button.setEnabled(False)
+                self._institution.set_busy(False)
+                if institution_kind:
+                    if job and job.status is JobStatus.COMPLETED:
+                        self._finish_institution_job(institution_kind, job)
+                    else:
+                        self._institution.set_error(
+                            "Desk job stopped; inspect frozen reports before rerunning."
+                        )
                 if job and job.status is not JobStatus.COMPLETED:
                     if self._debate_job:
                         self._debate_status.setText(
@@ -674,6 +911,14 @@ class AiQuantDeskPage(LabPageShell):
         try:
             repository = AgentRepository(self._repo_path)
             try:
+                service = InstitutionDeskService(repository, self._provider)
+                cycle = service.latest()
+                if cycle and (
+                    self._institution_cycle is None
+                    or self._institution_cycle.content_hash != cycle.content_hash
+                ):
+                    self._institution_cycle = cycle
+                    self._institution.set_cycle(self._institution_cycle_payload(cycle))
                 runs = repository.list(AgentRunRecord)
                 presentation = AgentDeskPresentationService()
                 states = []
@@ -851,7 +1096,11 @@ class AiQuantDeskPage(LabPageShell):
                     max(desk_states, key=lambda item: item.created_at) if desk_states else None
                 )
                 self._visual.bridge.publish(
-                    tuple(states), tuple(evidence[:40]), debate_dto, decision_dto
+                    tuple(states),
+                    tuple(evidence[:40]),
+                    debate_dto,
+                    decision_dto,
+                    self._institution_presentation(),
                 )
             finally:
                 repository.close()
@@ -876,6 +1125,9 @@ class AiQuantDeskPage(LabPageShell):
             self._positions.set_assessments(())
             self._performance.set_scorecards(())
             self._daily_desk.set_state(None)
+            self._institution_cycle = None
+            self._institution_answer = None
+            self._institution.set_error("Saved desk evidence could not be verified.")
             for inspector in self._inspectors.values():
                 inspector.setPlainText("Persistence unavailable. Research runs are blocked.")
             self._visual.bridge.publish(
@@ -890,3 +1142,32 @@ class AiQuantDeskPage(LabPageShell):
                 ),
                 (),
             )
+
+    @staticmethod
+    def _institution_cycle_payload(cycle: DeskCycle) -> dict[str, object]:
+        payload = cycle.model_dump(mode="json")
+        payload["reports"] = [
+            row.model_dump(mode="json") for row in (*cycle.reports, cycle.supervisor_report)
+        ]
+        return payload
+
+    def _finish_institution_job(self, kind: str, job: Job) -> None:
+        repository: AgentRepository | None = None
+        try:
+            repository = AgentRepository(self._repo_path)
+            if kind == "cycle":
+                cycle = InstitutionDeskService(repository, self._provider).verify(
+                    repository.get(str(job.result["cycle_hash"]), DeskCycle)
+                )
+                self._institution_cycle = cycle
+                self._institution_answer = None
+                self._institution.set_cycle(self._institution_cycle_payload(cycle))
+            else:
+                answer = repository.get(str(job.result["answer_hash"]), NayakAnswer)
+                self._institution_answer = answer
+                self._institution.show_answer(answer.model_dump(mode="json"))
+        except (OSError, RuntimeError, KeyError, ValueError):
+            self._institution.set_error("The completed desk artifact could not be verified.")
+        finally:
+            if repository is not None:
+                repository.close()

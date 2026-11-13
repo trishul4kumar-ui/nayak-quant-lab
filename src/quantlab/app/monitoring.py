@@ -8,6 +8,8 @@ from typing import Any
 from pydantic import BaseModel
 
 from quantlab.core.config import get_settings
+from quantlab.core.errors import DataIntegrityError
+from quantlab.data.policy import fixtures_enabled
 from quantlab.monitoring.experiment import run_monitoring_experiment
 from quantlab.monitoring.library import seed_paper_result
 from quantlab.monitoring.models import MonitoringRequest, MonitoringResult
@@ -53,7 +55,23 @@ def inspect_payload(run_id: str) -> dict[str, Any]:
     return payload
 
 
-def run_payload(*, ledger: str = "") -> dict[str, Any]:
+def run_payload(
+    *,
+    ledger: str = "",
+    workflow_id: str = "",
+    mark_history_hashes: tuple[str, ...] = (),
+    repository_path: Path | None = None,
+) -> dict[str, Any]:
+    if not fixtures_enabled():
+        from quantlab.app.paper_workflow import run_selected_workflow
+
+        return run_selected_workflow(
+            "monitoring",
+            workflow_id=workflow_id,
+            mark_history_hashes=mark_history_hashes,
+            repository_path=repository_path,
+            ledger_path=_ledger_path(ledger),
+        )
     paper, decision, target = seed_paper_result()
     result, row = run_monitoring_experiment(
         MonitoringRequest(),
@@ -76,6 +94,10 @@ def run_payload(*, ledger: str = "") -> dict[str, Any]:
 def _need() -> MonitoringResult:
     result = last_result()
     if result is None:
+        if not fixtures_enabled():
+            raise DataIntegrityError(
+                "MONITORING_RUN_REQUIRED: choose a paper workflow and subsequent sourced marks"
+            )
         run_payload()
         result = last_result()
     assert result is not None
@@ -159,6 +181,21 @@ def report_payload() -> dict[str, Any]:
 
 
 def last_run_row() -> dict[str, Any] | None:
+    if not fixtures_enabled():
+        from quantlab.app.paper_workflow import latest_workflow_result
+
+        payload = latest_workflow_result("monitoring")
+        if payload is None:
+            return None
+        return {
+            "id": payload["run"]["monitoring_run_id"],
+            "pnl": payload["pnl"]["pnl_total"],
+            "residual": payload["pnl"]["residual_pnl"],
+            "drift": payload["drift"]["status"],
+            "hash": payload["run"]["run_hash"],
+            "workflow_id": payload["workflow_id"],
+            "historical_replay": True,
+        }
     result = last_result()
     if result is None:
         return None

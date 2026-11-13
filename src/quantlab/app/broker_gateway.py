@@ -76,7 +76,10 @@ def health_payload() -> dict[str, Any]:
     return status_payload()
 
 
-def connect_payload(scenario: str = "normal", *, adapter: str = "mock") -> dict[str, Any]:
+def connect_payload(scenario: str = "normal", *, adapter: str | None = None) -> dict[str, Any]:
+    from quantlab.data.policy import fixtures_enabled
+
+    adapter = adapter or ("mock" if fixtures_enabled() else "kite")
     if adapter == "kite":
         return _safe(lambda: _dump(connect(adapter_name="kite")))
     return _safe(lambda: _dump(connect(MockScenario(scenario), adapter_name="mock")))

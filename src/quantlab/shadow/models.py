@@ -61,6 +61,8 @@ class FreshnessRecord(BaseModel):
     age_ms: float = 0.0
     stale: bool = False
     calendar_status: str = "not_tested"
+    clock_kind: str = "observed"
+    source_captured_at: datetime | None = None
     note: str = ""
 
 
@@ -322,6 +324,8 @@ class Heartbeat(BaseModel):
 
 
 class ShadowRequest(BaseModel):
+    historical_replay: bool = False
+    source_captured_at: datetime | None = None
     mode: ShadowMode = ShadowMode.RESEARCH_PAPER
     trigger: TriggerKind = TriggerKind.MANUAL_PAPER_RUN
     decision_time: datetime | None = None

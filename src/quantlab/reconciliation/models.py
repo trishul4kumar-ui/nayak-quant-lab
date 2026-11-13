@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 from enum import StrEnum
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class ReconciliationStatus(StrEnum):
@@ -42,15 +42,16 @@ class ExceptionStatus(StrEnum):
 class ReconciliationTolerances(BaseModel):
     """No implicit rounding: every permitted deviation is recorded in the report."""
 
-    model_config = ConfigDict(frozen=True)
+    model_config = ConfigDict(frozen=True, allow_inf_nan=False)
 
-    policy_version: str = "3.3.0"
-    quantity_absolute: float = 0.0
-    price_absolute: float = 0.01
-    cash_absolute: float = 0.01
-    value_absolute: float = 0.01
-    timestamp_seconds: float = 5.0
-    max_broker_capture_window_seconds: float = 5.0
+    policy_version: str = "3.6.0"
+    quantity_absolute: float = Field(default=0.0, ge=0)
+    price_absolute: float = Field(default=0.01, ge=0)
+    cash_absolute: float = Field(default=0.01, ge=0)
+    value_absolute: float = Field(default=0.01, ge=0)
+    timestamp_seconds: float = Field(default=5.0, ge=0)
+    max_broker_capture_window_seconds: float = Field(default=5.0, ge=0)
+    max_snapshot_age_seconds: float = Field(default=60.0, ge=0)
 
 
 class InternalPosition(BaseModel):
@@ -123,6 +124,8 @@ class ReconciliationReport(BaseModel):
     reconciliation_id: str
     broker_snapshot_id: str | None
     internal_snapshot_id: str | None
+    broker_snapshot_content_hash: str | None = None
+    internal_snapshot_content_hash: str | None = None
     policy_version: str
     tolerances: ReconciliationTolerances
     status: ReconciliationStatus

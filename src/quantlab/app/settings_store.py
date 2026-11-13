@@ -23,6 +23,23 @@ class UiDensity(StrEnum):
     COMPACT = "compact"
 
 
+class WindowPlacement(BaseModel):
+    """Preferred display and normal geometry in Qt logical coordinates."""
+
+    screen_id: str = ""
+    x: int = Field(default=40, ge=-100000, le=100000)
+    y: int = Field(default=40, ge=-100000, le=100000)
+    width: int = Field(default=1280, ge=200, le=16000)
+    height: int = Field(default=800, ge=160, le=10000)
+    maximized: bool = False
+
+
+class CompanionPlacement(BaseModel):
+    x_fraction: float = Field(default=1.0, ge=0.0, le=1.0)
+    y_fraction: float = Field(default=1.0, ge=0.0, le=1.0)
+    collapsed: bool = False
+
+
 class UiSettings(BaseModel):
     ui_layout_schema_version: int = 2
     width: int = 1280
@@ -49,6 +66,19 @@ class UiSettings(BaseModel):
     broker_wizard_complete: bool = False
     onboarding_intent: str = ""
     selected_template: str = "cs_momentum_v1"
+    window_placements: dict[str, WindowPlacement] = Field(default_factory=dict)
+    nayak_companion: CompanionPlacement = Field(default_factory=CompanionPlacement)
+    research_history_hashes: list[str] = Field(default_factory=list)
+    strategy_history_hashes: list[str] = Field(default_factory=list)
+    strategy_batch_hash: str = ""
+    paper_arrival_history_hashes: list[str] = Field(default_factory=list)
+    paper_mark_history_hashes: list[str] = Field(default_factory=list)
+    research_result_hashes: dict[str, str] = Field(default_factory=dict)
+    paper_workflow_id: str = ""
+    paper_opening_cash: float | None = Field(default=None, gt=0)
+    internal_account_snapshot_hash: str = ""
+    selected_candidate_id: str = ""
+    selected_backtest_id: str = ""
 
 
 class UiSettingsStore:

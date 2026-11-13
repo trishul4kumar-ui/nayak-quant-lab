@@ -38,6 +38,7 @@ from quantlab.broker_gateway.secrets import redact
 from quantlab.broker_gateway.state import ConnectionState, current, force, is_healthy, transition
 from quantlab.broker_gateway.state import reset_for_tests as reset_state
 from quantlab.core.config import LiveSafetyGates
+from quantlab.data.policy import fixtures_enabled, require_test_fixtures
 from quantlab.release.service import last_result as last_cert
 from quantlab.release.state import current as cert_state
 from quantlab.safety.kill_switch import live_release_blocked
@@ -56,7 +57,11 @@ def reset_for_tests() -> None:
 def _adapter() -> BrokerAdapter:
     global _ADAPTER
     if _ADAPTER is None:
-        _ADAPTER = MockBrokerAdapter()
+        _ADAPTER = (
+            MockBrokerAdapter() if fixtures_enabled() else KiteReadOnlyAdapter.from_environment()
+        )
+    if isinstance(_ADAPTER, MockBrokerAdapter):
+        require_test_fixtures("mock account adapter")
     return _ADAPTER
 
 
@@ -207,6 +212,8 @@ def snapshot() -> GatewaySnapshotBundle:
 
 def reconcile(books: InternalBooks | None = None) -> ReconResult:
     bundle = last_bundle() or snapshot()
+    if bundle.adapter_id.startswith("mock"):
+        require_test_fixtures("reconciliation using archived mock broker data")
     result = run_reconcile(bundle, books)
     put_recon(result)
     if result.status in {ReconStatus.MISMATCH, ReconStatus.BLOCKED, ReconStatus.PARTIAL}:
@@ -280,6 +287,7 @@ def audit_history() -> list[dict[str, object]]:
 
 def matching_internal_books() -> InternalBooks:
     """Internal books aligned to the mock normal scenario. Still not live."""
+    require_test_fixtures("fabricated aligned internal broker books")
     return InternalBooks(
         cash=100_000.0,
         reserved_cash=0.0,

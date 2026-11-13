@@ -3,7 +3,12 @@ from __future__ import annotations
 import pytest
 
 from quantlab.capital.allocator import allocate
-from quantlab.capital.definitions import AbstentionCode, CapitalAllocationState, DrawdownState
+from quantlab.capital.definitions import (
+    AbstentionCode,
+    CapitalAllocationState,
+    DrawdownLimits,
+    DrawdownState,
+)
 from quantlab.capital.drawdown import classify_drawdown
 from quantlab.capital.library import seed_policy, seed_request
 
@@ -23,3 +28,24 @@ def test_halt_does_not_open_new_exposure() -> None:
     assert result.decision.abstention_code is AbstentionCode.DRAWDOWN_HALT
     assert result.decision.capital_state is CapitalAllocationState.HALT
     assert result.decision.target_weights == {}
+
+
+@pytest.mark.parametrize("drawdown", [float("nan"), float("inf"), -float("inf")])
+def test_unknown_drawdown_never_returns_normal(drawdown: float) -> None:
+    assert classify_drawdown(drawdown, seed_policy().drawdown_limits) is DrawdownState.HALTED
+    result = allocate(seed_request(drawdown=drawdown))
+    assert result.decision.capital_state is CapitalAllocationState.HALT
+    assert result.decision.target_weights == {}
+
+
+@pytest.mark.parametrize(
+    "limits",
+    [
+        DrawdownLimits(caution=float("nan")),
+        DrawdownLimits(caution=-0.01),
+        DrawdownLimits(caution=0.2, defensive=0.1),
+        DrawdownLimits(halt=1.1),
+    ],
+)
+def test_invalid_drawdown_policy_fails_closed(limits: DrawdownLimits) -> None:
+    assert classify_drawdown(0.0, limits) is DrawdownState.HALTED

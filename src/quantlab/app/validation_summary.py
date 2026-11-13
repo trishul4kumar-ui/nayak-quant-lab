@@ -17,7 +17,12 @@ class ValidationTwoQuestions:
 
 
 def validation_two_questions(runtime: ApplicationRuntime) -> ValidationTwoQuestions:
-    row = last_validation_row(runtime)
+    prefs = runtime.ui_settings.current
+    row = last_validation_row(
+        runtime,
+        parent_run_id=str(getattr(prefs, "selected_backtest_id", "")) or None,
+        candidate_id=str(getattr(prefs, "selected_candidate_id", "")) or None,
+    )
     if row is None:
         return ValidationTwoQuestions(
             profit_line="No validation yet — run the suite after your first backtest.",
@@ -29,29 +34,28 @@ def validation_two_questions(runtime: ApplicationRuntime) -> ValidationTwoQuesti
     sharpe = row.get("sharpe")
     gate = str(row.get("gate_outcome") or "unknown").lower()
     reasons = row.get("gate_reasons") or {}
-    passed = sum(1 for v in reasons.values() if str(v).lower() in {"pass", "passed", "ok", "true"})
-    total = len(reasons)
+    checks = [str(value).lower() for key, value in reasons.items() if key != "outcome"]
+    passed = sum(value in {"pass", "passed", "ok", "true"} for value in checks)
+    failed = sum(value in {"fail", "failed", "reject"} for value in checks)
+    warnings = sum(value in {"warn", "warning"} for value in checks)
+    untested = sum(value in {"not_tested", "unknown", ""} for value in checks)
+    total = len(checks)
 
     if isinstance(sharpe, float):
-        target = 1.0
-        if sharpe >= target:
-            profit_line = f"Sharpe {sharpe:.2f} — at or above {target:.1f} target"
-            profit_tone = "ok"
-        else:
-            gap = target - sharpe
-            profit_line = f"Sharpe {sharpe:.2f} — {gap:.2f} below {target:.1f} target"
-            profit_tone = "warn"
+        profit_line = (
+            f"Recorded OOS Sharpe {sharpe:.2f}. This estimate does not predict a profit target."
+        )
+        profit_tone = "neutral"
     else:
         profit_line = "Sharpe unavailable — review equity curve"
         profit_tone = "warn"
 
-    if gate == "pass":
-        rules_line = f"All {total} gate checks passed — rules intact"
-        rules_tone = "ok"
-    elif total:
-        failed = total - passed
-        rules_line = f"{failed} of {total} gate checks failing — review before live"
-        rules_tone = "bad" if failed > 0 else "warn"
+    if total:
+        rules_line = (
+            f"{passed}/{total} PASS · {failed} FAIL · {warnings} WARN · {untested} NOT_TESTED. "
+            f"Research gate: {gate.upper()}; not live authorization."
+        )
+        rules_tone = "bad" if failed else "warn" if warnings or untested else "neutral"
     else:
         rules_line = "Gate reasons not recorded — inspect summary table"
         rules_tone = "warn"

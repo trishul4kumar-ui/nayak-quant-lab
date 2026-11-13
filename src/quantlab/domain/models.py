@@ -57,6 +57,7 @@ class RiskVerdict(StrEnum):
 
 class ExperimentStatus(StrEnum):
     RUNNING = "running"
+    COMPLETED = "completed"  # Computation finished; not a validation/promotion PASS.
     PASSED = "passed"
     FAILED = "failed"
 

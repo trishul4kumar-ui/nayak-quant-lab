@@ -26,6 +26,7 @@ POLICY_TIME = datetime(2026, 10, 4, tzinfo=UTC)
 # Exact metric, engine route, unit. Descriptive beta/regime labels are deliberately absent.
 METRIC_SPECS: tuple[tuple[str, ToolName, str], ...] = (
     ("integrity", ToolName.RUN_VALIDATION, "boolean"),
+    ("pit_evidence", ToolName.RUN_VALIDATION, "check"),
     ("test_set_integrity", ToolName.RUN_VALIDATION, "boolean"),
     ("next_bar_fill", ToolName.RUN_BACKTEST, "boolean"),
     ("walk_forward_windows", ToolName.RUN_VALIDATION, "count"),
@@ -63,7 +64,7 @@ def default_adjudication_policy() -> AdjudicationPolicy:
     )
     return AdjudicationPolicy(
         created_at=POLICY_TIME,
-        policy_id="43-v1",
+        policy_id="43-v2-pit-evidence",
         schema_version="adjudication-v1",
         required_evidence=tuple(name for name, _, _ in METRIC_SPECS),
         components=tuple(
@@ -104,6 +105,7 @@ def freeze_gate_evidence(
     rows = {row.name: row for row in measurements}
     names = (
         "integrity",
+        "pit_evidence",
         "next_bar_fill",
         "estimated_cost_bps",
         "walk_forward_windows",
@@ -115,15 +117,16 @@ def freeze_gate_evidence(
         "test_set_integrity",
         "multiple_testing",
     )
-    source_hashes = tuple(sorted(rows[name].content_hash for name in names))
+    source_hashes = tuple(sorted(rows[name].content_hash for name in names if name in rows))
     missing = FrozenResearchGateEvidence(
         created_at=now, outcome=None, reasons=(), measurement_hashes=source_hashes
     )
-    if any(rows[name].status is not EvidenceStatus.PASS for name in names):
+    if any(name not in rows or rows[name].status is not EvidenceStatus.PASS for name in names):
         return missing
     values = {name: rows[name].value for name in names}
     numeric = tuple(
-        name for name in names if name not in {"statistical_evidence", "multiple_testing"}
+        name for name in names
+        if name not in {"statistical_evidence", "multiple_testing", "pit_evidence"}
     )
     if any(values[name] is None for name in numeric):
         return missing
@@ -141,6 +144,7 @@ def freeze_gate_evidence(
         n_hypotheses=int(values["n_hypotheses"] or 0),
         test_used_for_selection=values["test_set_integrity"] != 1,
         multiple_testing_status=CheckResult.PASS,
+        pit_evidence=CheckResult.PASS,
     )
     return FrozenResearchGateEvidence(
         created_at=now,

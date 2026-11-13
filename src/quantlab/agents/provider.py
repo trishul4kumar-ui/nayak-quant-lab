@@ -10,7 +10,8 @@ import urllib.error
 import urllib.request
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import Any, Protocol, TypeVar
+from typing import Any, Literal, Protocol, TypeVar
+from urllib.parse import urlsplit, urlunsplit
 
 from pydantic import BaseModel, ConfigDict, SecretStr, ValidationError
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -18,9 +19,15 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 from quantlab.agents.contracts import AgentModelIdentity
 from quantlab.agents.errors import AgentProviderError
 from quantlab.agents.hashing import digest
+from quantlab.agents.provider_budget import ProviderBudgetLedger, ProviderBudgetPolicy
 from quantlab.agents.repository import AgentRepository
 
 T = TypeVar("T", bound=BaseModel)
+
+# These are transport ceilings, not estimates of the provider's actual usage
+# or financial cost. Individual desk roles can and do impose lower limits.
+MAX_OUTPUT_TOKENS_PER_ATTEMPT = 6000
+MAX_REQUEST_CHARACTERS = 128000
 
 
 @dataclass(frozen=True)
@@ -30,6 +37,7 @@ class StructuredRequest:
     schema_json: str
     timeout_seconds: float = 30.0
     max_output_tokens: int = 2000
+    budget_family_id: str | None = None
 
     def prompt_hash(self) -> str:
         return digest({"sections": self.sections, "schema": self.schema_json})
@@ -180,15 +188,140 @@ class OpenAIResponsesProvider:
         return self.generate_structured(request)
 
 
+class OllamaProvider:
+    """Localhost-only Ollama chat transport for bounded structured research output."""
+
+    _LOCAL_HOSTS = frozenset({"127.0.0.1", "::1", "localhost"})
+
+    def __init__(self, model: str = "qwen3:4b", host: str = "http://127.0.0.1:11434") -> None:
+        if not model or len(model) > 128 or any(char.isspace() for char in model):
+            raise ValueError("invalid local Ollama model name")
+        self._model = model
+        self._chat_endpoint = self._chat_url(host)
+        self._identity = AgentModelIdentity(
+            created_at=datetime(2026, 10, 8, tzinfo=UTC),
+            provider="ollama-local",
+            model=model,
+            version="ollama-chat-json-schema-v1",
+        )
+        self._observed_status = "NOT_TESTED"
+        self._transport_slot = threading.BoundedSemaphore(1)
+
+    @classmethod
+    def _chat_url(cls, host: str) -> str:
+        """Permit only a bare loopback Ollama host; never a user-supplied remote URL."""
+        parsed = urlsplit(host)
+        try:
+            port = parsed.port
+        except ValueError as exc:
+            raise ValueError("invalid local Ollama host port") from exc
+        hostname = (parsed.hostname or "").lower()
+        if (
+            parsed.scheme not in {"http", "https"}
+            or hostname not in cls._LOCAL_HOSTS
+            or parsed.username is not None
+            or parsed.password is not None
+            or parsed.path not in {"", "/"}
+            or parsed.query
+            or parsed.fragment
+            or port is None
+        ):
+            raise ValueError("Ollama host must be an explicit loopback host and port")
+        return urlunsplit((parsed.scheme, parsed.netloc, "/api/chat", "", ""))
+
+    def identity(self) -> AgentModelIdentity:
+        return self._identity
+
+    def health(self) -> ProviderHealth:
+        return ProviderHealth(
+            provider=self._identity.provider,
+            model=self._model,
+            configured=True,
+            observed_status=self._observed_status,
+        )
+
+    def generate_structured(self, request: StructuredRequest) -> str:
+        if not self._transport_slot.acquire(blocking=False):
+            raise AgentProviderError("PROVIDER_BUSY")
+        try:
+            return self._generate(request)
+        finally:
+            self._transport_slot.release()
+
+    def continue_structured(self, request: StructuredRequest) -> str:
+        # Stateless continuation preserves the existing frozen-evidence boundary.
+        return self.generate_structured(request)
+
+    def _generate(self, request: StructuredRequest) -> str:
+        if not request.sections:
+            raise AgentProviderError("INVALID_PROVIDER_REQUEST")
+        try:
+            schema = strict_schema(json.loads(request.schema_json))
+        except (TypeError, ValueError):
+            raise AgentProviderError("INVALID_PROVIDER_SCHEMA") from None
+        payload = {
+            "model": self._model,
+            "stream": False,
+            "think": False,
+            "messages": [
+                {"role": "system", "content": request.sections[0][1]},
+                {
+                    "role": "user",
+                    "content": json.dumps(dict(request.sections[1:]), sort_keys=True),
+                },
+            ],
+            "format": schema,
+            "options": {"temperature": 0, "num_predict": request.max_output_tokens},
+        }
+        req = urllib.request.Request(
+            self._chat_endpoint,
+            data=json.dumps(payload).encode(),
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=request.timeout_seconds) as response:
+                raw = response.read(1_000_001)
+            if len(raw) > 1_000_000:
+                raise AgentProviderError("PROVIDER_RESPONSE_TOO_LARGE")
+            body = json.loads(raw)
+            if not isinstance(body, dict) or body.get("done") is not True:
+                raise AgentProviderError("PROVIDER_INCOMPLETE")
+            message = body.get("message")
+            if body.get("refusal") is True or (
+                isinstance(message, dict) and message.get("refusal") is True
+            ):
+                self._observed_status = "REFUSED"
+                raise AgentProviderError("PROVIDER_REFUSED")
+            if not isinstance(message, dict) or message.get("role") != "assistant":
+                raise AgentProviderError("PROVIDER_INVALID_RESPONSE")
+            content = message.get("content")
+            if not isinstance(content, str) or not content.strip():
+                raise AgentProviderError("PROVIDER_INVALID_RESPONSE")
+            self._observed_status = "RESPONDED"
+            return content
+        except AgentProviderError:
+            raise
+        except (urllib.error.URLError, TimeoutError, ValueError, TypeError):
+            self._observed_status = "UNAVAILABLE"
+            raise AgentProviderError("PROVIDER_TRANSPORT_OR_RESPONSE_FAILED") from None
+
+
 class AgentProviderSettings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+
+    quant_lab_agent_provider: Literal["auto", "ollama", "openai"] = "auto"
     openai_api_key: SecretStr | None = None
     quant_lab_agent_model: str | None = None
+    quant_lab_ollama_model: str = "qwen3:4b"
+    quant_lab_ollama_host: str = "http://127.0.0.1:11434"
 
 
 def configured_provider() -> AgentModelProvider:
     try:
         settings = AgentProviderSettings()
+        if settings.quant_lab_agent_provider == "ollama":
+            return OllamaProvider(settings.quant_lab_ollama_model, settings.quant_lab_ollama_host)
         key, model = settings.openai_api_key, settings.quant_lab_agent_model
         if key is None or not key.get_secret_value() or not model:
             return UnavailableProvider()
@@ -200,9 +333,22 @@ def configured_provider() -> AgentModelProvider:
 
 
 class ProviderRunner:
-    def __init__(self, provider: AgentModelProvider, repository: AgentRepository) -> None:
+    def __init__(
+        self,
+        provider: AgentModelProvider,
+        repository: AgentRepository,
+        *,
+        budget_policy: ProviderBudgetPolicy | None = None,
+        require_budget: bool = False,
+    ) -> None:
+        if type(require_budget) is not bool:
+            raise ValueError("require_budget must be a boolean")
         self.provider, self.repository = provider, repository
         self._slot = threading.BoundedSemaphore(1)
+        self._budget = ProviderBudgetLedger(repository)
+        self._require_budget = require_budget
+        if budget_policy is not None:
+            self._budget.configure(budget_policy)
 
     def generate(
         self,
@@ -212,18 +358,24 @@ class ProviderRunner:
         cancel: threading.Event | None = None,
         schema_retries: int = 1,
     ) -> T:
-        if not 0 <= schema_retries <= 2 or not 0 < request.timeout_seconds <= 120:
+        if (
+            type(schema_retries) is not int
+            or not 0 <= schema_retries <= 2
+            or type(request.max_output_tokens) is not int
+            or not 0 < request.max_output_tokens <= MAX_OUTPUT_TOKENS_PER_ATTEMPT
+            or not 0 < request.timeout_seconds <= 120
+            or not request.run_id.strip()
+            or (
+                len(request.schema_json)
+                + sum(len(name) + len(value) for name, value in request.sections)
+                > MAX_REQUEST_CHARACTERS
+            )
+        ):
             raise AgentProviderError("INVALID_PROVIDER_BUDGET")
         deadline = time.monotonic() + request.timeout_seconds
         for attempt in range(schema_retries + 1):
             if cancel is not None and cancel.is_set():
                 raise AgentProviderError("PROVIDER_CANCELLED")
-            self.repository.audit(
-                "PROVIDER_REQUESTED",
-                run_id=request.run_id,
-                now=datetime.now(UTC),
-                artifact_hash=request.prompt_hash(),
-            )
             raw = self._call(request, deadline, cancel, continuing=attempt > 0)
             # Hash only; do not persist or log the raw provider text.
             self.repository.audit(
@@ -265,12 +417,47 @@ class ProviderRunner:
                     else self.provider.generate_structured
                 )
                 result.put(fn(request))
+            except AgentProviderError as exc:
+                # Preserve only the explicit transport timeout needed by the
+                # local desk's deterministic abstention path.  Other provider
+                # failures remain opaque at this boundary, including a busy
+                # transport that could otherwise disclose concurrent activity.
+                if str(exc) == "PROVIDER_TIMEOUT":
+                    result.put(exc)
+                else:
+                    result.put(AgentProviderError("PROVIDER_FAILED"))
             except Exception:
                 result.put(AgentProviderError("PROVIDER_FAILED"))
             finally:
                 self._slot.release()
 
-        threading.Thread(target=invoke, daemon=True, name="quantlab-provider").start()
+        try:
+            if cancel is not None and cancel.is_set():
+                raise AgentProviderError("PROVIDER_CANCELLED")
+            if time.monotonic() >= deadline:
+                raise AgentProviderError("PROVIDER_TIMEOUT")
+            self._budget.reserve(
+                task_id=request.run_id,
+                family_id=request.budget_family_id,
+                output_cap=request.max_output_tokens,
+                prompt_hash=request.prompt_hash(),
+                require_policy=self._require_budget,
+            )
+            if cancel is not None and cancel.is_set():
+                raise AgentProviderError("PROVIDER_CANCELLED")
+            if time.monotonic() >= deadline:
+                raise AgentProviderError("PROVIDER_TIMEOUT")
+            self.repository.audit(
+                "PROVIDER_REQUESTED",
+                run_id=request.run_id,
+                now=datetime.now(UTC),
+                artifact_hash=request.prompt_hash(),
+                safe_code=f"OUTPUT_TOKEN_CAP_{request.max_output_tokens}",
+            )
+            threading.Thread(target=invoke, daemon=True, name="quantlab-provider").start()
+        except Exception:
+            self._slot.release()
+            raise
         while True:
             if cancel is not None and cancel.is_set():
                 raise AgentProviderError("PROVIDER_CANCELLED")

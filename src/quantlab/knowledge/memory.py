@@ -31,6 +31,10 @@ _PROCESS: KnowledgeGraph | None = None
 
 
 def seed_graph() -> KnowledgeGraph:
+    from quantlab.data.policy import fixtures_enabled
+
+    if not fixtures_enabled():
+        return KnowledgeGraph(graph_id="kg-real-empty")
     graph = KnowledgeGraph(graph_id="kg-seed")
     hypo = HypothesisRecord(
         hypothesis_id="H-MOM-001",

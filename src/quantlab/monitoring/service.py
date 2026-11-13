@@ -13,7 +13,7 @@ from quantlab.monitoring.attribution import security_attribution
 from quantlab.monitoring.benchmark import equal_weight_universe, user_benchmark
 from quantlab.monitoring.concentration import herfindahl
 from quantlab.monitoring.drift import measure_drift
-from quantlab.monitoring.enums import MonitoringRunStatus
+from quantlab.monitoring.enums import BenchmarkKind, MonitoringRunStatus
 from quantlab.monitoring.errors import MonitoringError, PerformanceReconciliationError
 from quantlab.monitoring.exposure import exposure_map
 from quantlab.monitoring.factor_attribution import factor_attribution
@@ -22,6 +22,7 @@ from quantlab.monitoring.identity import hash_attribution, hash_pnl, hash_run, i
 from quantlab.monitoring.integrity import MonitoringLeakFlags
 from quantlab.monitoring.library import seed_paper_result
 from quantlab.monitoring.models import (
+    BenchmarkSeries,
     EquityPoint,
     MonitoringRequest,
     MonitoringResult,
@@ -35,7 +36,7 @@ from quantlab.monitoring.risk_monitor import risk_observation
 from quantlab.monitoring.state import lookup, put_result
 from quantlab.monitoring.turnover import fill_turnover
 from quantlab.paper_oms.library import seed_snapshot
-from quantlab.paper_oms.models import PaperOMSResult
+from quantlab.paper_oms.models import PaperMarketSnapshot, PaperOMSResult
 from quantlab.research.integrity import evaluate_integrity
 
 
@@ -80,6 +81,9 @@ def run_monitoring(
     target: TargetPortfolio | None = None,
     leaks: MonitoringLeakFlags | None = None,
     beginning_equity: float | None = None,
+    snapshot: PaperMarketSnapshot | None = None,
+    arrival_snapshot: PaperMarketSnapshot | None = None,
+    persist_result: bool = True,
 ) -> MonitoringResult:
     used = request or MonitoringRequest()
     gates = LiveSafetyGates()
@@ -100,17 +104,43 @@ def run_monitoring(
     if target.decision_id != decision.decision_id:
         flags = flags.model_copy(update={"target_observation_confusion": True})
         raise MonitoringError("target_observation_confusion: target is not this decision")
-    snapshot = seed_snapshot()
+    from quantlab.data.policy import fixtures_enabled, require_real_data
+    from quantlab.paper_oms.positions import mark_positions
+
+    if snapshot is None:
+        if not fixtures_enabled():
+            raise MonitoringError(
+                "MARK_SNAPSHOT_REQUIRED: choose subsequent frozen real marks for this paper run"
+            )
+        snapshot = seed_snapshot()
+    if not fixtures_enabled():
+        require_real_data(used.data_kind, source=snapshot.source)
+        require_real_data(decision.data_kind, source=snapshot.source)
+        require_real_data(snapshot.data_kind, source=snapshot.source)
+        if not snapshot.evidence_hashes:
+            raise MonitoringError("MARK_EVIDENCE_REQUIRED: no frozen source hash supplied")
+        if snapshot.as_of < paper.run.completed_at:
+            raise MonitoringError("MARK_PRECEDES_PAPER_RUN: select marks at or after completion")
+        missing = sorted(set(paper.account.positions) - set(snapshot.prices))
+        if missing:
+            raise MonitoringError(f"MISSING_POSITION_MARKS: {', '.join(missing)}")
+        if paper.decision_id != decision.decision_id:
+            raise MonitoringError("PAPER_DECISION_MISMATCH: select the original decision")
+        paper = paper.model_copy(update={"account": mark_positions(paper.account, snapshot)})
     key = idempotency_key(
         decision_hash=decision.decision_hash,
         oms_run_id=paper.run.oms_run_id,
-        snapshot_id=paper.run.snapshot_id,
+        snapshot_id=snapshot.snapshot_id,
         methodology_id=used.methodology_id,
-        benchmark_id="ew-universe-synthetic"
-        if used.user_benchmark_returns is None
-        else "user-supplied",
+        benchmark_id=(
+            "user-supplied"
+            if used.user_benchmark_returns is not None
+            else "ew-arrival-to-mark"
+            if arrival_snapshot is not None
+            else "unavailable"
+        ),
     )
-    cached = lookup(key)
+    cached = lookup(key) if persist_result else None
     if cached is not None:
         return cached
 
@@ -137,7 +167,7 @@ def run_monitoring(
             equity=start_equity,
         ),
         EquityPoint(
-            as_of=paper.run.completed_at,
+            as_of=snapshot.as_of,
             cash=paper.account.cash,
             reserved_cash=paper.account.reserved_cash,
             market_value=paper.account.market_value,
@@ -148,8 +178,34 @@ def run_monitoring(
     port_ret = simple_return(start_equity, paper.account.equity)
     if used.user_benchmark_returns is not None:
         bench = user_benchmark(used.user_benchmark_returns, portfolio_return=port_ret)
-    else:
+    elif arrival_snapshot is not None:
+        names = sorted(set(arrival_snapshot.prices) & set(snapshot.prices))
+        benchmark_returns = [
+            snapshot.prices[name] / arrival_snapshot.prices[name] - 1.0
+            for name in names
+            if arrival_snapshot.prices[name] > 0
+        ]
+        bench = user_benchmark(benchmark_returns, portfolio_return=port_ret).model_copy(
+            update={
+                "benchmark_id": "ew-arrival-to-mark",
+                "kind": BenchmarkKind.EQUAL_WEIGHT_UNIVERSE,
+                "note": (
+                    "Equal-weight price return across frozen arrival/mark intersections; "
+                    "not an index."
+                ),
+            }
+        )
+    elif fixtures_enabled():
         bench = equal_weight_universe(snapshot, paper.account, beginning_equity=start_equity)
+    else:
+        from quantlab.domain.research import CheckResult
+
+        bench = BenchmarkSeries(
+            benchmark_id="unavailable",
+            kind=BenchmarkKind.UNAVAILABLE,
+            status=CheckResult.NOT_TESTED,
+            note="No independently sourced benchmark or original arrival marks supplied.",
+        )
     returns = report_returns(
         beginning=start_equity,
         ending=paper.account.equity,
@@ -173,14 +229,14 @@ def run_monitoring(
     snap = snapshot_from_account(
         paper.account,
         pnl,
-        as_of=paper.run.completed_at,
-        snapshot_id=f"perf-{paper.run.oms_run_id}",
+        as_of=snapshot.as_of,
+        snapshot_id=f"perf-{paper.run.oms_run_id}-{snapshot.snapshot_id}",
     )
     run = MonitoringRun(
-        monitoring_run_id=f"MON-{paper.run.oms_run_id}",
+        monitoring_run_id=f"MON-{paper.run.oms_run_id}-{key[:12]}",
         decision_hash=decision.decision_hash,
         oms_run_id=paper.run.oms_run_id,
-        snapshot_id=paper.run.snapshot_id,
+        snapshot_id=snapshot.snapshot_id,
         methodology_id=used.methodology_id,
         as_of=used.as_of if isinstance(used.as_of, datetime) else paper.run.completed_at,
         status=MonitoringRunStatus.COMPLETE,
@@ -209,4 +265,4 @@ def run_monitoring(
         reconciliation_ok=True,
         live_trading=False,
     )
-    return put_result(result, key=key)
+    return put_result(result, key=key) if persist_result else result

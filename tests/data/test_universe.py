@@ -33,22 +33,37 @@ def test_universe_as_of_excludes_delisted_and_future_members() -> None:
             listing_date=datetime(2024, 6, 1, tzinfo=UTC),
         )
     )
+    for item in master.all():
+        assert item.listing_date is not None
+        master.add_pit_revision(
+            item, effective_time=item.listing_date,
+            available_time=item.listing_date, source="fixture"
+        )
     memberships = [
         Membership(
+            membership_id="aaa",
             security_id="SYNTH:NSE:AAA",
             universe_id="synth-index",
             valid_from=listed,
+            available_time=listed,
+            source="synthetic_fixture",
         ),
         Membership(
+            membership_id="bbb",
             security_id="SYNTH:NSE:BBB",
             universe_id="synth-index",
             valid_from=listed,
             valid_to=delist,
+            available_time=listed,
+            source="synthetic_fixture",
         ),
         Membership(
+            membership_id="new",
             security_id="SYNTH:NSE:NEW",
             universe_id="synth-index",
             valid_from=datetime(2024, 6, 1, tzinfo=UTC),
+            available_time=datetime(2024, 6, 1, tzinfo=UTC),
+            source="synthetic_fixture",
         ),
     ]
     universe = PointInTimeUniverse("synth-index", master, memberships, version="u-v1")

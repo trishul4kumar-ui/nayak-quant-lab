@@ -79,6 +79,7 @@ class Settings(BaseSettings):
     quant_lab_env: str = "research"
     quant_lab_mode: str = "research"
     log_level: str = "INFO"
+    research_dataset: str = Field(default="", validation_alias="QUANT_LAB_RESEARCH_DATASET")
     tz: str = "Asia/Kolkata"
     experiment_ledger_path: Path = Field(default=Path("experiments/ledger.jsonl"))
     data_dir: Path | None = Field(

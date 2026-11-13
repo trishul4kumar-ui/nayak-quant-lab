@@ -44,25 +44,40 @@ def pit_return_matrix(
 ) -> tuple[list[str], np.ndarray]:
     if lookback < 2:
         raise CovarianceError("covariance lookback must be >= 2 sessions")
-    columns: list[list[float]] = []
-    kept: list[str] = []
+    if len(names) < 2 or len(set(names)) != len(names):
+        raise CovarianceError("covariance requires at least two distinct instrument names")
+    by_name: list[dict[tuple[datetime, datetime], float]] = []
+    latest_events: list[datetime] = []
     for name in names:
         inst = InstrumentId.parse(name)
         series = bars.get(inst)
         if series is None:
-            continue
+            raise CovarianceError(f"missing PIT history for {name}")
         available = pit_bars(series, as_of)
         rets = simple_returns([b.close for b in available])
         if len(rets) < lookback:
-            continue
-        columns.append(rets[-lookback:])
-        kept.append(name)
-    if len(kept) < 2:
-        raise CovarianceError("need at least two names with sufficient PIT history")
+            raise CovarianceError(f"insufficient PIT history for {name}")
+        latest_events.append(available[-1].pit.event_time)
+        intervals = [
+            (left.pit.event_time, right.pit.event_time)
+            for left, right in zip(available[:-1], available[1:], strict=True)
+        ]
+        by_name.append(dict(zip(intervals, rets, strict=True)))
+    common = set(by_name[0])
+    for row in by_name[1:]:
+        common.intersection_update(row)
+    selected = sorted(common)[-lookback:]
+    if len(selected) < lookback:
+        raise CovarianceError("insufficient aligned PIT return intervals")
+    if selected[-1][1] != max(latest_events):
+        raise CovarianceError("aligned PIT return intervals stop before the latest observation")
+    if any(left[1] != right[0] for left, right in zip(selected[:-1], selected[1:], strict=True)):
+        raise CovarianceError("aligned PIT return intervals contain a gap")
+    columns = [[row[interval] for interval in selected] for row in by_name]
     arr = np.asarray(columns, dtype=np.float64).T
     if not np.isfinite(arr).all():
         raise CovarianceError("non-finite returns in covariance window")
-    return kept, arr
+    return names, arr
 
 
 def sample_covariance(
@@ -134,7 +149,7 @@ def covariance_cache_key(
 ) -> str:
     return config_hash(
         {
-            "covariance_implementation": "spectral-tolerance-v2",
+            "covariance_implementation": "aligned-intervals-v3",
             "snapshot_id": snapshot_id,
             "names": sorted(names),
             "as_of": as_of.isoformat(),

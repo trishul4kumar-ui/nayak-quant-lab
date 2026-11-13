@@ -25,7 +25,7 @@ from quantlab.agents.contracts import (
     ResearchMode,
     Stance,
 )
-from quantlab.agents.errors import AgentContextError
+from quantlab.agents.errors import AgentContextError, AgentProviderError
 from quantlab.agents.hashing import digest
 from quantlab.agents.provider import ProviderHealth, StructuredRequest, UnavailableProvider
 from quantlab.agents.repository import AgentRepository
@@ -65,6 +65,7 @@ class ResearchFixtureProvider:
             provider="fixture", model="test", configured=True, observed_status="FIXTURE_ONLY"
         )
 
+
     def generate_structured(self, request: StructuredRequest) -> str:
         self.calls += 1
         self.requests.append(request)
@@ -94,6 +95,8 @@ class ResearchFixtureProvider:
             )
         evidence = json.loads(dict(request.sections)["UNTRUSTED EVIDENCE"])
         context = json.loads(dict(request.sections)["FROZEN CONTEXT SUMMARY"])
+        if self.fault == "memo_timeout":
+            raise AgentProviderError("PROVIDER_TIMEOUT")
         payload = self.memo_payload(context["security_scope"], evidence["results"])
         if self.fault == "foreign_ref":
             payload["evidence_for"] = [digest("not an evidence artifact")]
@@ -138,6 +141,18 @@ class ResearchFixtureProvider:
             if self.stance == "NO_TRADE"
             else None,
         }
+
+
+class LocalResearchFixtureProvider(ResearchFixtureProvider):
+    """Uses the local-provider identity without making a network request."""
+
+    def identity(self) -> AgentModelIdentity:
+        return AgentModelIdentity(
+            created_at=NOW,
+            provider="ollama-local",
+            model="qwen3:1.7b",
+            version="fixture-local",
+        )
 
 
 def make_context(
@@ -205,6 +220,30 @@ def test_bull_pipeline_and_unvalidated_long_downgrade(repository: AgentRepositor
     assert memo.self_falsification and len(memo.thesis.invalidation_conditions) >= 2
     screen = repository.get(memo.screen_hash, ResearchScreen)
     assert len(screen.research_queue) == len(context.security_scope)
+
+
+def test_local_provider_uses_a_bounded_compact_memo_budget(repository: AgentRepository) -> None:
+    provider = LocalResearchFixtureProvider()
+    context = make_context(repository, provider)
+    run = BullWorker(repository, provider, clock=lambda: NOW).run(context)
+    assert run.memo_hash
+    assert [request.timeout_seconds for request in provider.requests] == [60.0, 20.0]
+    assert [request.max_output_tokens for request in provider.requests] == [1000, 600]
+
+
+def test_local_memo_timeout_freezes_an_explicit_no_trade_memo(repository: AgentRepository) -> None:
+    provider = LocalResearchFixtureProvider(fault="memo_timeout")
+    context = make_context(repository, provider)
+    run = BullWorker(repository, provider, clock=lambda: NOW).run(context)
+    assert run.state is AgentState.NO_TRADE and run.memo_hash
+    memo = repository.get(run.memo_hash, BullResearchMemo)
+    assert memo.stance is Stance.NO_TRADE
+    assert memo.no_trade_reason == "LOCAL_MEMO_TIMEOUT_REQUIRES_MORE_RESEARCH"
+    assert any("timed out" in item.description for item in memo.uncertainties)
+    assert any(
+        event.event == "LOCAL_MEMO_TIMEOUT_ABSTAINED"
+        for event in repository.audit_events(context.run_id)
+    )
 
 
 def test_no_trade_is_successful_and_restart_preserves_memo(tmp_path: Path) -> None:

@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+from collections import Counter
 from datetime import UTC, datetime
+from math import isfinite
 
 from quantlab.broker_gateway.models import GatewaySnapshotBundle, InternalBooks
 from quantlab.broker_gateway.secrets import account_id_hash
@@ -34,6 +36,9 @@ _ALLOWED_TRANSITIONS: frozenset[tuple[ExceptionStatus, ExceptionStatus]] = froze
 
 def internal_from_books(books: InternalBooks, *, observed_at: datetime) -> InternalAccountSnapshot:
     """Compatibility bridge for the existing mock-only internal books fixture."""
+    from quantlab.data.policy import require_test_fixtures
+
+    require_test_fixtures("legacy mock internal-books conversion")
     positions = tuple(
         InternalPosition(
             security_id=item[0],
@@ -86,7 +91,13 @@ def reconcile(
     observed_at: datetime | None = None,
 ) -> ReconciliationReport:
     """Compare snapshots without mutating either source or invoking any broker operation."""
-    policy = tolerances or ReconciliationTolerances()
+    # Revalidate copied/untrusted policies; frozen Pydantic models can still be
+    # constructed with unchecked `model_copy(update=...)` values.
+    policy = (
+        ReconciliationTolerances.model_validate(tolerances.model_dump())
+        if tolerances is not None
+        else ReconciliationTolerances()
+    )
     now = observed_at or _observed_at(broker, internal)
     if broker is None:
         return _report(
@@ -96,7 +107,7 @@ def reconcile(
         return _report(
             broker, None, policy, ReconciliationStatus.INTERNAL_STATE_UNAVAILABLE, (), (), (), now
         )
-    if _is_stale(broker, internal, policy):
+    if _is_stale(broker, internal, policy, now):
         exc = _exception(
             "snapshot",
             "freshness",
@@ -142,8 +153,8 @@ def reconcile(
     )
     _compare_positions(broker, internal, policy, exceptions, matches, tolerated, now)
     _compare_holdings(broker, internal, policy, exceptions, matches, tolerated, now)
-    _compare_orders(broker, internal, policy, exceptions, matches, now)
-    _compare_fills(broker, internal, exceptions, matches, now)
+    _compare_orders(broker, internal, policy, exceptions, matches, tolerated, now)
+    _compare_fills(broker, internal, policy, exceptions, matches, tolerated, now)
 
     critical = any(item.severity == "critical" for item in exceptions)
     status = (
@@ -210,6 +221,8 @@ def _compare_scalar(
 ) -> None:
     if broker_value is None or internal_value is None:
         exceptions.append(_exception(name, name, "warning", "comparison unavailable", now))
+    elif not isfinite(broker_value) or not isfinite(internal_value):
+        exceptions.append(_exception(name, name, "critical", "comparison value is not finite", now))
     elif broker_value == internal_value:
         matches.append(name)
     elif abs(broker_value - internal_value) <= tolerance:
@@ -237,9 +250,16 @@ def _compare_positions(
     tolerated: list[str],
     now: datetime,
 ) -> None:
+    invalid = _invalid_keys(
+        tuple(item.security_id for item in broker.positions),
+        tuple(item.security_id for item in internal.positions),
+        "position", exceptions, now,
+    )
     broker_rows = {item.security_id: item for item in broker.positions}
     internal_rows = {item.security_id: item for item in internal.positions}
     for security_id in sorted(set(broker_rows) | set(internal_rows)):
+        if security_id in invalid:
+            continue
         left, right = broker_rows.get(security_id), internal_rows.get(security_id)
         if left is None or right is None:
             exceptions.append(
@@ -300,9 +320,16 @@ def _compare_holdings(
     tolerated: list[str],
     now: datetime,
 ) -> None:
+    invalid = _invalid_keys(
+        tuple(item.security_id for item in broker.holdings),
+        tuple(item.security_id for item in internal.holdings),
+        "holding", exceptions, now,
+    )
     broker_rows = {item.security_id: item for item in broker.holdings}
     internal_rows = {item.security_id: item for item in internal.holdings}
     for security_id in sorted(set(broker_rows) | set(internal_rows)):
+        if security_id in invalid:
+            continue
         left, right = broker_rows.get(security_id), internal_rows.get(security_id)
         if left is None or right is None:
             exceptions.append(
@@ -339,11 +366,19 @@ def _compare_orders(
     policy: ReconciliationTolerances,
     exceptions: list[ReconciliationException],
     matches: list[str],
+    tolerated: list[str],
     now: datetime,
 ) -> None:
+    invalid = _invalid_keys(
+        tuple(item.broker_order_id for item in broker.orders),
+        tuple(item.broker_order_id for item in internal.orders),
+        "order", exceptions, now,
+    )
     broker_rows = {item.broker_order_id: item for item in broker.orders}
     internal_rows = {item.broker_order_id: item for item in internal.orders}
     for order_id in sorted(set(broker_rows) | set(internal_rows)):
+        if order_id in invalid:
+            continue
         left, right = broker_rows.get(order_id), internal_rows.get(order_id)
         if left is None:
             exceptions.append(
@@ -367,6 +402,13 @@ def _compare_orders(
                     order_status=OrderMatchStatus.BROKER_ONLY,
                 )
             )
+        elif not left.status.strip() or not right.status.strip():
+            exceptions.append(
+                _exception(
+                    "order", order_id, "warning", "order status unavailable", now,
+                    order_status=OrderMatchStatus.UNKNOWN,
+                )
+            )
         elif left.status.lower() != right.status.lower():
             exceptions.append(
                 _exception(
@@ -376,6 +418,20 @@ def _compare_orders(
                     "order status mismatch",
                     now,
                     order_status=OrderMatchStatus.STATUS_MISMATCH,
+                )
+            )
+        elif not isfinite(left.quantity) or not isfinite(right.quantity):
+            exceptions.append(
+                _exception(
+                    "order", order_id, "critical", "order quantity is not finite", now,
+                    order_status=OrderMatchStatus.UNKNOWN,
+                )
+            )
+        elif left.quantity <= 0 or right.quantity <= 0:
+            exceptions.append(
+                _exception(
+                    "order", order_id, "critical", "order quantity is not positive", now,
+                    order_status=OrderMatchStatus.UNKNOWN,
                 )
             )
         elif abs(left.quantity - right.quantity) > policy.quantity_absolute:
@@ -389,11 +445,28 @@ def _compare_orders(
                     order_status=OrderMatchStatus.QUANTITY_MISMATCH,
                 )
             )
-        elif (
-            left.price is not None
-            and right.price is not None
-            and abs(left.price - right.price) > policy.price_absolute
-        ):
+        elif left.price is None or right.price is None:
+            exceptions.append(
+                _exception(
+                    "order", order_id, "warning", "order price unavailable", now,
+                    order_status=OrderMatchStatus.UNKNOWN,
+                )
+            )
+        elif not isfinite(left.price) or not isfinite(right.price):
+            exceptions.append(
+                _exception(
+                    "order", order_id, "critical", "order price is not finite", now,
+                    order_status=OrderMatchStatus.UNKNOWN,
+                )
+            )
+        elif left.price <= 0 or right.price <= 0:
+            exceptions.append(
+                _exception(
+                    "order", order_id, "warning", "order price is not positive", now,
+                    order_status=OrderMatchStatus.UNKNOWN,
+                )
+            )
+        elif abs(left.price - right.price) > policy.price_absolute:
             exceptions.append(
                 _exception(
                     "order",
@@ -405,8 +478,18 @@ def _compare_orders(
                 )
             )
         elif (
-            right.observed_at is not None
-            and abs((left.source_timestamp - right.observed_at).total_seconds())
+            right.observed_at is None
+            or right.observed_at.utcoffset() is None
+            or left.source_timestamp.utcoffset() is None
+        ):
+            exceptions.append(
+                _exception(
+                    "order", order_id, "warning", "order timestamp unavailable", now,
+                    order_status=OrderMatchStatus.UNKNOWN,
+                )
+            )
+        elif (
+            abs((left.source_timestamp - right.observed_at).total_seconds())
             > policy.timestamp_seconds
         ):
             exceptions.append(
@@ -419,56 +502,134 @@ def _compare_orders(
                     order_status=OrderMatchStatus.TIMESTAMP_MISMATCH,
                 )
             )
+        elif (
+            left.quantity != right.quantity
+            or left.price != right.price
+            or left.source_timestamp != right.observed_at
+        ):
+            tolerated.append(f"order:{order_id}")
         else:
             matches.append(f"order:{order_id}")
+
+
+def _invalid_keys(
+    broker_keys: tuple[str, ...],
+    internal_keys: tuple[str, ...],
+    dimension: str,
+    exceptions: list[ReconciliationException],
+    now: datetime,
+) -> set[str]:
+    invalid: set[str] = set()
+    for side, keys in (("broker", broker_keys), ("internal", internal_keys)):
+        for key, count in sorted(Counter(keys).items()):
+            if not key.strip():
+                exceptions.append(
+                    _exception(dimension, key, "critical", f"empty {side} identifier", now)
+                )
+                invalid.add(key)
+            elif count > 1:
+                exceptions.append(
+                    _exception(dimension, key, "critical", f"duplicate {side} identifier", now)
+                )
+                invalid.add(key)
+    return invalid
 
 
 def _compare_fills(
     broker: GatewaySnapshotBundle,
     internal: InternalAccountSnapshot,
+    policy: ReconciliationTolerances,
     exceptions: list[ReconciliationException],
     matches: list[str],
+    tolerated: list[str],
     now: datetime,
 ) -> None:
-    seen: set[str] = set()
-    internal_ids = {item.broker_fill_id for item in internal.fills}
-    broker_ids: set[str] = set()
-    for fill in broker.fills:
-        if fill.broker_fill_id in seen:
+    broker_counts = Counter(item.broker_fill_id for item in broker.fills)
+    internal_counts = Counter(item.broker_fill_id for item in internal.fills)
+    broker_rows = {item.broker_fill_id: item for item in broker.fills}
+    internal_rows = {item.broker_fill_id: item for item in internal.fills}
+    for fill_id in sorted(set(broker_rows) | set(internal_rows)):
+        if broker_counts[fill_id] > 1:
             exceptions.append(
                 _exception(
-                    "fill", fill.broker_fill_id, "critical", "duplicate broker fill identifier", now
+                    "fill", fill_id, "critical", "duplicate broker fill identifier", now
                 )
             )
+        if internal_counts[fill_id] > 1:
+            exceptions.append(
+                _exception(
+                    "fill", fill_id, "critical", "duplicate internal fill identifier", now
+                )
+            )
+        if broker_counts[fill_id] > 1 or internal_counts[fill_id] > 1:
             continue
-        seen.add(fill.broker_fill_id)
-        broker_ids.add(fill.broker_fill_id)
-        if fill.broker_fill_id in internal_ids:
-            matches.append(f"fill:{fill.broker_fill_id}")
-        else:
+        left, right = broker_rows.get(fill_id), internal_rows.get(fill_id)
+        if right is None:
+            exceptions.append(
+                _exception("fill", fill_id, "critical", "unknown broker fill identifier", now)
+            )
+        elif left is None:
+            exceptions.append(
+                _exception("fill", fill_id, "warning", "internal fill absent at broker", now)
+            )
+        elif left.broker_order_id != right.broker_order_id:
+            exceptions.append(
+                _exception("fill", fill_id, "critical", "fill order identity mismatch", now)
+            )
+        elif not all(
+            isfinite(value) for value in (left.quantity, right.quantity, left.price, right.price)
+        ):
+            exceptions.append(
+                _exception("fill", fill_id, "critical", "fill value is not finite", now)
+            )
+        elif abs(left.quantity - right.quantity) > policy.quantity_absolute:
             exceptions.append(
                 _exception(
-                    "fill", fill.broker_fill_id, "critical", "unknown broker fill identifier", now
+                    "fill", fill_id, "critical", "fill quantity mismatch", now,
+                    left.quantity, right.quantity,
                 )
             )
-    for missing in sorted(internal_ids - broker_ids):
-        exceptions.append(
-            _exception("fill", missing, "warning", "internal fill absent at broker", now)
-        )
+        elif abs(left.price - right.price) > policy.price_absolute:
+            exceptions.append(
+                _exception(
+                    "fill", fill_id, "critical", "fill price mismatch", now, left.price, right.price
+                )
+            )
+        elif left.quantity != right.quantity or left.price != right.price:
+            tolerated.append(f"fill:{fill_id}")
+        else:
+            matches.append(f"fill:{fill_id}")
 
 
 def _is_stale(
     broker: GatewaySnapshotBundle,
     internal: InternalAccountSnapshot,
     policy: ReconciliationTolerances,
+    now: datetime,
 ) -> bool:
+    start, completed = broker.capture_started_at, broker.capture_completed_at
+    times = (now, broker.provenance.source_timestamp, broker.provenance.captured_at,
+             internal.observed_at, start, completed)
+    if any(value is None or value.utcoffset() is None for value in times):
+        return True
+    if start is None or completed is None or completed < start:
+        return True
+    ages = (
+        (now - broker.provenance.source_timestamp).total_seconds(),
+        (now - broker.provenance.captured_at).total_seconds(),
+        (now - internal.observed_at).total_seconds(),
+        (now - completed).total_seconds(),
+    )
+    if any(age < 0 or age > policy.max_snapshot_age_seconds for age in ages):
+        return True
     timestamp_mismatch = (
         abs((broker.provenance.source_timestamp - internal.observed_at).total_seconds())
         > policy.timestamp_seconds
     )
     capture_window = broker.capture_window_seconds
     capture_too_wide = (
-        capture_window is None or capture_window > policy.max_broker_capture_window_seconds
+        capture_window is None or capture_window < 0
+        or capture_window > policy.max_broker_capture_window_seconds
     )
     return timestamp_mismatch or capture_too_wide
 
@@ -477,7 +638,7 @@ def _observed_at(
     broker: GatewaySnapshotBundle | None, internal: InternalAccountSnapshot | None
 ) -> datetime:
     if broker is not None:
-        return broker.provenance.captured_at
+        return broker.capture_completed_at or broker.provenance.captured_at
     if internal is not None:
         return internal.observed_at
     return datetime.now(tz=UTC)
@@ -517,9 +678,13 @@ def _report(
     tolerated: tuple[str, ...],
     now: datetime,
 ) -> ReconciliationReport:
+    broker_hash = sha256(broker.model_dump(mode="json")) if broker else None
+    internal_hash = sha256(internal.model_dump(mode="json")) if internal else None
     material = {
         "broker": broker.bundle_id if broker else None,
         "internal": internal.snapshot_id if internal else None,
+        "broker_content": broker_hash,
+        "internal_content": internal_hash,
         "policy": policy.model_dump(mode="json"),
         "status": status.value,
         "exceptions": [item.model_dump(mode="json") for item in exceptions],
@@ -532,6 +697,8 @@ def _report(
         reconciliation_id=f"reconciliation-{digest[:12]}",
         broker_snapshot_id=broker.bundle_id if broker else None,
         internal_snapshot_id=internal.snapshot_id if internal else None,
+        broker_snapshot_content_hash=broker_hash,
+        internal_snapshot_content_hash=internal_hash,
         policy_version=policy.policy_version,
         tolerances=policy,
         status=status,

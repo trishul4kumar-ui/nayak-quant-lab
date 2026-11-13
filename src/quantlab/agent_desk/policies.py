@@ -38,6 +38,8 @@ def admits_job(
     requires_model = job.job_type in {
         DeskJobType.BULL_SCAN,
         DeskJobType.BEAR_SCAN,
+        DeskJobType.DOCUMENT_NEWS_REVIEW,
+        DeskJobType.QUANT_RESEARCH,
         DeskJobType.DEBATE,
     }
     return not requires_model or running_model_calls < policy.max_concurrent_model_calls

@@ -2,16 +2,13 @@
 
 from __future__ import annotations
 
-from datetime import datetime, time
+from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 
 from quantlab.agent_desk.models import DeskSession
-from quantlab.core.time import IST
 from quantlab.data.fabric.calendar import SourcedCalendar, TradingCalendar
 
-_OPEN = time(9, 15)
-_OPENING_END = time(9, 30)
-_CLOSING_START = time(15, 15)
-_CLOSE = time(15, 30)
+_PHASE_WINDOW = timedelta(minutes=15)
 
 
 def require_sourced_calendar(calendar: TradingCalendar) -> SourcedCalendar:
@@ -22,17 +19,20 @@ def require_sourced_calendar(calendar: TradingCalendar) -> SourcedCalendar:
 
 
 def classify_session(when: datetime, calendar: TradingCalendar) -> DeskSession:
-    require_sourced_calendar(calendar)
-    local = when.astimezone(IST)
+    source = require_sourced_calendar(calendar)
+    if when.utcoffset() is None:
+        raise ValueError("SESSION_TIME_MUST_BE_AWARE")
+    local = when.astimezone(ZoneInfo(source.timezone))
     if not calendar.is_session(local.date()):
         return DeskSession.CLOSED
-    current = local.timetz().replace(tzinfo=None)
-    if current < _OPEN:
+    opening = calendar.session_open(local.date())
+    closing = calendar.session_close(local.date())
+    if when < opening:
         return DeskSession.PRE_MARKET
-    if current < _OPENING_END:
+    if when >= closing:
+        return DeskSession.POST_MARKET
+    if when < min(opening + _PHASE_WINDOW, closing):
         return DeskSession.OPENING
-    if current < _CLOSING_START:
+    if when < closing - _PHASE_WINDOW:
         return DeskSession.CONTINUOUS
-    if current < _CLOSE:
-        return DeskSession.CLOSING
-    return DeskSession.POST_MARKET
+    return DeskSession.CLOSING

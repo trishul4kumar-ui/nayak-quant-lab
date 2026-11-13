@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import json
-import shutil
+import sqlite3
+from collections.abc import Iterator
+from contextlib import contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -86,7 +88,84 @@ def _probe_pit(store: PitStore, bars: list[OHLCVBar]) -> bool:
     return all(bar.pit.available_time <= early for bar in early_rows)
 
 
+def _validate_identity_component(value: str, name: str) -> None:
+    if (
+        not value.strip()
+        or value in {".", ".."}
+        or "/" in value
+        or "\\" in value
+        or "\x00" in value
+    ):
+        raise DataIntegrityError(f"{name} must be a single nonempty path component")
+
+
+def _bars_fingerprint(bars: list[OHLCVBar]) -> str:
+    payload = json.dumps(
+        [bar.model_dump(mode="json") for bar in bars],
+        sort_keys=True,
+        separators=(",", ":"),
+        allow_nan=False,
+    ).encode("utf-8")
+    return sha256_bytes(payload)
+
+
+@contextmanager
+def _ingest_writer_lock(layout: FabricLayout) -> Iterator[None]:
+    """Serialize fabric ingests; SQLite releases the lock after process death."""
+    layout.ensure()
+    connection = sqlite3.connect(str(layout.metadata / "ingest-writer-lock.sqlite"), timeout=30)
+    try:
+        try:
+            connection.execute("BEGIN IMMEDIATE")
+        except sqlite3.OperationalError as exc:
+            raise DataIntegrityError("DATASET_WRITE_LOCK_UNAVAILABLE") from exc
+        yield
+    finally:
+        connection.close()
+
+
 def ingest_bars(
+    layout: FabricLayout,
+    bars: list[OHLCVBar],
+    *,
+    dataset_id: str,
+    version: str,
+    source: str,
+    data_kind: DataKind,
+    raw_name: str,
+    raw_bytes: bytes,
+    calendar_version: str,
+    availability_convention: str = "explicit",
+    corporate_action_policy: str = "none",
+    universe_version: str = "",
+) -> IngestResult:
+    from quantlab.data.policy import require_real_data
+
+    require_real_data(data_kind.value, source=source)
+    _validate_identity_component(dataset_id, "dataset_id")
+    _validate_identity_component(version, "version")
+    _validate_identity_component(raw_name, "raw_name")
+    for root in (layout.raw, layout.normalized, layout.curated, layout.pit, layout.quarantine):
+        if not (root / dataset_id / version).resolve().is_relative_to(root.resolve()):
+            raise DataIntegrityError("dataset/version resolves outside the fabric layer")
+    with _ingest_writer_lock(layout):
+        return _ingest_bars_locked(
+            layout,
+            bars,
+            dataset_id=dataset_id,
+            version=version,
+            source=source,
+            data_kind=data_kind,
+            raw_name=raw_name,
+            raw_bytes=raw_bytes,
+            calendar_version=calendar_version,
+            availability_convention=availability_convention,
+            corporate_action_policy=corporate_action_policy,
+            universe_version=universe_version,
+        )
+
+
+def _ingest_bars_locked(
     layout: FabricLayout,
     bars: list[OHLCVBar],
     *,
@@ -103,24 +182,63 @@ def ingest_bars(
 ) -> IngestResult:
     layout.ensure()
     checksum = sha256_bytes(raw_bytes)
+    bars_checksum = _bars_fingerprint(bars)
     catalog = DatasetCatalog(layout)
     try:
-        existing = catalog.find_by_checksum(checksum)
-        if (
-            existing is not None
-            and existing.dataset_id == dataset_id
-            and existing.version == version
-            and existing.state is DatasetState.RESEARCH_READY
-            and parquet_files(layout, dataset_id, version)
-        ):
+        if not raw_name or Path(raw_name).name != raw_name or raw_name in {".", ".."}:
+            raise DataIntegrityError("raw_name must be a single filename")
+        existing = catalog.get(dataset_id, version)
+        if existing is not None:
+            # A dataset/version identifies one source and one interpretation. Reusing
+            # it with new bytes or changed metadata would invalidate prior runs.
+            matches = (
+                existing.checksum == checksum
+                and existing.data_kind is data_kind
+                and existing.source == source
+                and existing.calendar_version == calendar_version
+                and existing.corporate_action_policy == corporate_action_policy
+                and existing.universe_version == universe_version
+                and existing.extra.get("raw_filename") == raw_name
+                and existing.extra.get("availability_convention") == availability_convention
+                and existing.extra.get("bars_fingerprint_sha256") == bars_checksum
+            )
+            if not matches:
+                raise DataIntegrityError(
+                    "DATASET_VERSION_CONFLICT: dataset/version already binds different "
+                    "bytes or source metadata; use a new version"
+                )
+            stored_raw = layout.raw / dataset_id / version / raw_name
+            if (
+                not stored_raw.resolve().is_relative_to(layout.raw.resolve())
+                or not stored_raw.is_file()
+                or sha256_file(stored_raw) != checksum
+            ):
+                raise DataIntegrityError(
+                    "DATASET_SOURCE_MISMATCH: existing raw source is missing or changed"
+                )
+            if existing.state is not DatasetState.RESEARCH_READY or not parquet_files(
+                layout, dataset_id, version
+            ):
+                raise DataIntegrityError(
+                    "DATASET_VERSION_INCOMPLETE: existing version cannot be overwritten; "
+                    "inspect it and ingest under a new version"
+                )
             return IngestResult(
                 record=existing,
                 skipped=True,
                 research_ready=True,
-                availability_convention=existing.extra.get(
-                    "availability_convention", availability_convention
-                ),
+                availability_convention=availability_convention,
             )
+
+        # An interrupted previous ingestion may have left unregistered artifacts.
+        # Preserve them for diagnosis rather than silently overwriting them.
+        for root in (layout.raw, layout.normalized, layout.curated, layout.pit, layout.quarantine):
+            candidate = root / dataset_id / version
+            if candidate.exists() and any(candidate.iterdir()):
+                raise DataIntegrityError(
+                    "DATASET_VERSION_INCOMPLETE: unregistered artifacts already exist; "
+                    "inspect them and ingest under a new version"
+                )
 
         raw_dir = layout.raw_dir(dataset_id, version)
         dest = raw_dir / raw_name
@@ -162,14 +280,23 @@ def ingest_bars(
             calendar_version=calendar_version,
             universe_version=universe_version,
             snapshot_id=snapshot_id,
-            notes=(
-                "weekday calendar is not an official NSE holiday file"
-                if calendar_version.startswith("weekday")
-                else ""
+            notes=" ".join(
+                part
+                for part in (
+                    "weekday calendar is not an official NSE holiday file"
+                    if calendar_version.startswith("weekday")
+                    else "",
+                    "WARN: available_time uses session close 15:30 IST "
+                    "because the source had no timestamp"
+                    if availability_convention == "session_close"
+                    else "",
+                )
+                if part
             ),
             extra={
                 "availability_convention": availability_convention,
                 "raw_filename": raw_name,
+                "bars_fingerprint_sha256": bars_checksum,
                 "max_available_time": (
                     max(b.pit.available_time for b in accepted).isoformat() if accepted else ""
                 ),
@@ -219,39 +346,22 @@ def ingest_csv(
     data_kind: DataKind = DataKind.REAL,
     calendar: WeekdayCalendar | None = None,
 ) -> IngestResult:
+    from quantlab.data.policy import require_real_data
+
+    require_real_data(data_kind.value, source=str(source))
     if not source.is_file():
         raise DataIntegrityError(f"ingest source is not a file: {source}")
     calendar = calendar or WeekdayCalendar()
-    checksum = sha256_file(source)
-    catalog = DatasetCatalog(layout)
-    try:
-        existing = catalog.find_by_checksum(checksum)
-        if existing is not None and existing.state is DatasetState.RESEARCH_READY:
-            pit_files = list(
-                layout.pit_dir(existing.dataset_id, existing.version).glob("year=*/bars.parquet")
-            )
-            if pit_files:
-                return IngestResult(record=existing, skipped=True, research_ready=True)
-    finally:
-        catalog.close()
-
-    raw_dir = layout.raw_dir(dataset_id, version)
-    dest = raw_dir / source.name
-    if not dest.exists() or sha256_file(dest) != checksum:
-        shutil.copy2(source, dest)
+    raw_bytes = source.read_bytes()
     bars, convention = parse_ohlcv_csv(
-        dest,
+        source,
         data_kind=data_kind,
         dataset_version=version,
         source_id=source.name,
         calendar=calendar,
     )
-    raw_bytes = dest.read_bytes()
-    note = (
-        "WARN: available_time uses session close 15:30 IST because the source had no timestamp"
-        if convention == "session_close"
-        else "explicit timestamps"
-    )
+    if source.read_bytes() != raw_bytes:
+        raise DataIntegrityError("DATASET_SOURCE_CHANGED: source changed during parsing")
     result = ingest_bars(
         layout,
         bars,
@@ -264,16 +374,6 @@ def ingest_csv(
         calendar_version=calendar.version,
         availability_convention=convention,
     )
-    if convention == "session_close":
-        catalog = DatasetCatalog(layout)
-        try:
-            record = result.record.model_copy(
-                update={"notes": (result.record.notes + " " + note).strip()}
-            )
-            catalog.upsert(record)
-            result = result.model_copy(update={"record": record})
-        finally:
-            catalog.close()
     return result
 
 
@@ -282,19 +382,23 @@ def materialize_synthetic(
     *,
     n_days: int = 80,
     dataset_id: str = SYNTHETIC_DATASET_ID,
-    version: str = SYNTHETIC_VERSION,
+    version: str | None = None,
 ) -> IngestResult:
     provider = MemoryBarProvider(n_days=n_days)
     flat: list[OHLCVBar] = []
     for series in provider.all_bars().values():
         flat.extend(series)
+    # Fixture contents vary with n_days. A content-derived default gives each
+    # distinct fixture immutable identity without overwriting older versions.
+    raw_bytes = bars_to_csv_bytes(flat)
+    if version is None:
+        version = f"{SYNTHETIC_VERSION}-{sha256_bytes(raw_bytes)}"
     stamped = stamp_bars(
         flat,
         dataset_version=version,
         source_id="memory_synthetic_nse",
         data_kind=DataKind.SYNTHETIC,
     )
-    raw_bytes = bars_to_csv_bytes(stamped)
     return ingest_bars(
         layout,
         stamped,

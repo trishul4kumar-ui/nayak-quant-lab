@@ -4,23 +4,57 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' qrc:; style-src 'self'; img-src 'self' data:; connect-src 'none'; object-src 'none'; frame-src 'none'; base-uri 'none'; form-action 'none'">
-  <title>Bull / Bear Research Stations</title>
+  <meta name="color-scheme" content="dark">
+  <title>NAYAK · Institutional AI Desk</title>
   <script src="qrc:///qtwebchannel/qwebchannel.js"></script>
 </head>
 <body>
   <main>
-    <header><span>NAYAK / ANALYST STATIONS</span><span>RESEARCH · NO ORDER AUTHORITY</span></header>
-    <section class="stations" aria-label="Analyst states">
-      <button id="bull" class="station bull" type="button"><span>BULL</span><strong>IDLE</strong><small>No active run</small></button>
-      <button id="debate-transcript" class="system" type="button" disabled><span>FROZEN EVIDENCE · NO EXECUTION AUTHORITY</span><strong id="system-state">Waiting for native state</strong><small id="adjudication">Deterministic adjudication not evaluated</small></button>
-      <button id="bear" class="station bear" type="button"><span>BEAR</span><strong>IDLE</strong><small>No active run</small></button>
+    <header class="topbar">
+      <div class="brand"><span class="brand-mark" aria-hidden="true">N</span><div><strong>NAYAK</strong><span>QUANT INTELLIGENCE</span></div></div>
+      <div class="topbar-state"><span class="status-dot" aria-hidden="true"></span><span>LOCAL INTELLIGENCE</span><span class="boundary">RESEARCH ONLY</span></div>
+    </header>
+    <section class="heading">
+      <div><p class="eyebrow">YOUR INSTITUTIONAL AI TEAM</p><h1>One desk. Nine perspectives.</h1><p class="subtitle">Dedicated specialists. Frozen evidence. A single view of the work.</p></div>
+      <div class="desk-status"><span>DESK STATE</span><strong id="institution-state">WAITING FOR STATE</strong></div>
     </section>
-    <div id="scene" role="img" aria-label="Presentation of analyst states; native text contains the same information"></div>
-    <p id="fallback">Native analyst inspectors remain available.</p>
-    <p class="legend">Green: analyst support · amber: analyst contradiction · grey: critique/request · interpretations unverified. Select a node to inspect canonical evidence; the native transcript is always available.</p>
-    <section id="score-components" aria-label="Neutral canonical evidence score components" hidden></section>
-    <p id="decision-warnings" class="legend"></p>
-    <ul id="evidence" aria-label="Evidence navigation"></ul>
+    <section class="desk-layout" aria-label="Institutional intelligence desk">
+      <div class="scene-panel">
+        <div class="scene-topline"><span class="live-label">INSTITUTION CHAMBER</span><span>SELECT A FIGURE TO INSPECT</span></div>
+        <div id="scene" aria-label="Interactive 3D figures for NAYAK and eight specialist roles"><div id="scene-labels" aria-hidden="true"></div></div>
+        <div class="scene-bottomline"><span id="fallback">3D presentation · all research states are reported by the lab</span><button id="reset-view" type="button" aria-label="Reset the 3D camera">Reset view <span aria-hidden="true">↗</span></button></div>
+      </div>
+      <aside id="role-detail" class="detail-panel" aria-label="Selected agent details" aria-live="polite">
+        <div class="detail-caption"><span>SELECTED AGENT</span><span id="detail-number">01 / 09</span></div>
+        <div id="detail-symbol" class="detail-symbol" aria-hidden="true">N</div>
+        <p id="detail-title" class="eyebrow">INTERACTIVE CHIEF</p><h2 id="detail-name">NAYAK</h2>
+        <p id="detail-description">Your interactive entry point to the desk. Ask for evidence, research summaries, and the team's findings.</p>
+        <div class="agent-status"><span class="status-dot" aria-hidden="true"></span><strong id="detail-status">WAITING</strong></div>
+        <div class="detail-section"><span>CURRENT ASSIGNMENT</span><p id="detail-task">Waiting for a native desk update.</p></div>
+        <div class="detail-section"><span>LATEST REPORT</span><p id="detail-summary">No frozen report is available yet.</p></div>
+        <div class="detail-meta"><span id="detail-evidence">0 evidence artifacts</span><span id="detail-hash">UNPUBLISHED</span></div>
+        <button id="inspect-role" class="primary-button" type="button">Open NAYAK <span aria-hidden="true">↗</span></button>
+        <p class="detail-boundary">AI reports to the deterministic research and risk systems. All order permissions remain under the lab's existing controls.</p>
+      </aside>
+    </section>
+    <section class="roster-section" aria-label="Agent roster">
+      <div class="section-heading"><h3>THE TEAM</h3><span>Specialists report to the desk supervisor</span></div>
+      <div id="role-roster" class="role-roster"></div>
+    </section>
+    <section class="gate-flow" aria-label="Research reporting and review path">
+      <div><span class="flow-icon" aria-hidden="true">▧</span><span><strong>Frozen reports</strong><small>Every specialist cites evidence</small></span></div><span class="flow-arrow" aria-hidden="true">→</span>
+      <div><span class="flow-icon" aria-hidden="true">◇</span><span><strong>Deterministic systems</strong><small>Portfolio · risk · paper / shadow</small></span></div><span class="flow-arrow" aria-hidden="true">→</span>
+      <div><span class="flow-icon" aria-hidden="true">◎</span><span><strong>Human review</strong><small>Existing release &amp; safety gates</small></span></div>
+    </section>
+    <section class="research-panel" aria-label="Canonical research evidence">
+      <div class="section-heading"><h3>RESEARCH &amp; EVIDENCE</h3><span id="evidence-total">0 frozen artifacts</span></div>
+      <div class="research-summary"><p id="institution-summary">Start a research cycle in the native desk to see specialist reports here.</p><button id="debate-transcript" class="secondary-button" type="button" disabled>Open debate / decision <span aria-hidden="true">↗</span></button></div>
+      <p id="system-state" class="legend">Waiting for native state</p><p id="adjudication" class="legend">Deterministic adjudication not evaluated</p>
+      <section id="score-components" aria-label="Canonical evidence score components" hidden></section>
+      <p id="decision-warnings" class="legend"></p>
+      <ul id="evidence" aria-label="Evidence navigation"></ul>
+    </section>
+    <footer><span>NAYAK QUANT LAB</span><span>READ-ONLY AI · EVIDENCE BEFORE CONCLUSIONS</span></footer>
   </main>
   <script type="module" src="/src/main.ts"></script>
 </body>

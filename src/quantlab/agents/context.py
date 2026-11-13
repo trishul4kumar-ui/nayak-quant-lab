@@ -103,6 +103,9 @@ def create_context(
         kind = DataKind.REAL
     else:
         raise AgentContextError("UNVERIFIED_DATA_PROVENANCE")
+    from quantlab.data.policy import require_real_data
+
+    require_real_data(kind.value, source="agent research context")
     if history is not None:
         if history.snapshot_hash != snapshot.snapshot_hash or history.data_kind is not kind:
             raise AgentContextError("HISTORY_BOUNDARY_MISMATCH")
@@ -173,6 +176,9 @@ def create_context(
 
 def validate_context(repository: AgentRepository, context: AgentRunContext, now: datetime) -> None:
     context.verified()
+    from quantlab.data.policy import require_real_data
+
+    require_real_data(context.data_kind.value, source="frozen agent context")
     if now.tzinfo is None or now < context.created_at or now >= context.expires_at:
         raise AgentContextError("STALE_OR_INVALID_CLOCK")
     stored = repository.get(context.content_hash, AgentRunContext)

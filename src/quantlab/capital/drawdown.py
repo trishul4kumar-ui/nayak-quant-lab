@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import math
+
 from quantlab.capital.definitions import (
     AllocationMultipliers,
     CapitalAllocationState,
@@ -11,6 +13,14 @@ from quantlab.capital.definitions import (
 
 
 def classify_drawdown(drawdown: float, limits: DrawdownLimits) -> DrawdownState:
+    # Unknown drawdown or malformed policy cannot be treated as normal risk.
+    thresholds = (limits.caution, limits.defensive, limits.halt)
+    if (
+        not math.isfinite(drawdown)
+        or not all(math.isfinite(value) for value in thresholds)
+        or not 0 <= limits.caution <= limits.defensive <= limits.halt <= 1
+    ):
+        return DrawdownState.HALTED
     dd = abs(drawdown)
     if dd >= limits.halt:
         return DrawdownState.HALTED

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import sqlite3
-from collections.abc import Iterator
+from collections.abc import Iterator, Sequence
 from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
@@ -67,7 +67,7 @@ class AgentRepository:
         with self._persistence():
             return tuple(
                 contract.model_validate(row["artifact"])
-                for row in self.store.list_latest("agent_artifacts")
+                for row in self.store.list_latest("agent_artifacts", payload_type=contract.__name__)
                 if row["type"] == contract.__name__
             )
 
@@ -118,3 +118,22 @@ class AgentRepository:
                 payload_hash=digest(payload),
                 event="RUN_CLAIMED",
             )
+
+    def record_strategy_exposure(
+        self, identity: str, payload: dict[str, object]
+    ) -> Sequence[dict[str, object]]:
+        """Record a research interval and capture all prior intervals atomically."""
+        with self._persistence():
+            return self.store.append_with_prior_records(
+                namespace="strategy_history_exposure",
+                identity=identity,
+                payload=payload,
+                payload_hash=digest(payload),
+                event="STRATEGY_HISTORY_EXPOSED",
+            )
+
+    def strategy_exposure_and_prior(
+        self, identity: str
+    ) -> tuple[dict[str, object] | None, Sequence[dict[str, object]]]:
+        with self._persistence():
+            return self.store.record_and_prior_records("strategy_history_exposure", identity)

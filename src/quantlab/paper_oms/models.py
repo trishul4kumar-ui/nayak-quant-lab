@@ -34,6 +34,10 @@ class PaperMarketSnapshot(BaseModel):
     volumes: dict[str, float | None] = Field(default_factory=dict)
     tradable: dict[str, bool] = Field(default_factory=dict)
     lot_size: dict[str, int] = Field(default_factory=dict)
+    data_kind: str = "synthetic"
+    source: str = ""
+    evidence_hashes: tuple[str, ...] = ()
+    captured_at: datetime | None = None
     note: str = "Synthetic research snapshot. Not NSE quotes."
 
 
@@ -284,6 +288,7 @@ class OMSRun(BaseModel):
     decision_hash: str
     snapshot_id: str
     account_id: str
+    opening_account_hash: str = ""
     execution_policy_id: str
     started_at: datetime
     completed_at: datetime

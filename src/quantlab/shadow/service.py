@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
-
 from quantlab.capital.definitions import InvestmentDecision, TargetPortfolio
 from quantlab.certification.enums import CertificationState
 from quantlab.core.errors import ShadowCertificationError, ShadowError, StaleDataError
@@ -207,6 +205,7 @@ def run_shadow_cycle(
     account: PaperAccount | None = None,
     snapshot: PaperMarketSnapshot | None = None,
     leaks: ShadowLeakFlags | None = None,
+    persist_result: bool = True,
 ) -> ShadowResult:
     used = request or ShadowRequest()
     ignored = used.future_payload_ignored
@@ -247,7 +246,7 @@ def run_shadow_cycle(
         raise ShadowError("HALT rejects new exposure; HALT is not AUTO-LIQUIDATE")
     if current is ShadowMode.PAUSED:
         raise ShadowError("engine is PAUSED; no new decisions or orders")
-    if current is ShadowMode.OFF:
+    if current is ShadowMode.OFF and persist_result:
         assert_mode_transition(current, ShadowMode.RESEARCH_PAPER)
         set_mode(ShadowMode.RESEARCH_PAPER)
 
@@ -268,6 +267,14 @@ def run_shadow_cycle(
     used_decision = decision or seed_decision()
     used_target = target or seed_target()
     used_account = _account_for(effective, account)
+    from quantlab.data.policy import fixtures_enabled, require_real_data
+
+    if not fixtures_enabled():
+        require_real_data(used.data_kind, source=used_snapshot.source)
+        require_real_data(used_decision.data_kind, source=used_snapshot.source)
+        require_real_data(used_snapshot.data_kind, source=used_snapshot.source)
+        if not used_snapshot.evidence_hashes:
+            raise ShadowError("ORIGINAL_MARKET_EVIDENCE_REQUIRED: freeze sourced arrival inputs")
     as_of = used_snapshot.as_of
     decision_time = used.decision_time or as_of
     available_time = used.available_time or as_of
@@ -308,6 +315,20 @@ def run_shadow_cycle(
         record_incident(IncidentKind.DATA_STALE, "stale data cannot generate a trade")
         halt(reason=KillReason.DATA_STALE)
         raise
+    if used.historical_replay:
+        if used.source_captured_at is None:
+            raise ShadowError("REPLAY_SOURCE_CAPTURE_CLOCK_REQUIRED")
+        freshness = freshness.model_copy(
+            update={
+                "clock_kind": "historical_replay_assumption",
+                "source_captured_at": used.source_captured_at,
+                "note": (
+                    "REPLAY_ANALYTICAL_CLOCK_NOT_OBSERVED: received/available times and age "
+                    "are replay assumptions, not historical availability or current feed health. "
+                    "Actual source capture is retained separately."
+                ),
+            }
+        )
     flags = flags.model_copy(
         update={
             "future_shadow_data": False,
@@ -341,15 +362,17 @@ def run_shadow_cycle(
         data_snapshot_hash=frozen.snapshot_hash,
         portfolio_state_hash=frozen.portfolio_state_hash,
         configuration_hash=config.configuration_hash,
+        decision_hash=used_decision.decision_hash,
+        target_hash=used_target.portfolio_hash,
     )
-    existing = lookup(key)
+    existing = lookup(key) if persist_result else None
     if existing is not None:
         flags = flags.model_copy(update={"duplicate_cycle": False})
         return existing
 
     paper_result = None
     orders: list[ShadowOrder] = []
-    cycle_stub = f"CYC-{frozen.snapshot_hash[:12]}"
+    cycle_stub = f"CYC-{key[:12]}"
     if status is not CycleStatus.ABSTAINED:
         paper_result = run_paper_execution(
             request=PaperOMSRequest(
@@ -364,6 +387,7 @@ def run_shadow_cycle(
             target=used_target,
             account=used_account,
             snapshot=used_snapshot,
+            persist_result=persist_result,
         )
         status = _advance(status, CycleStatus.EXECUTED)
         intents = [from_paper_intent(item, cycle_id=cycle_stub) for item in paper_result.intents]
@@ -427,7 +451,7 @@ def run_shadow_cycle(
         latency = LatencyRecord()
         paper_account = used_account
 
-    now = datetime(2024, 1, 15, tzinfo=UTC)
+    now = decision_time
     kind = ResultKind.RESEARCH_RESULT
     if requested is ShadowMode.PAPER:
         kind = ResultKind.PAPER_RESULT
@@ -488,12 +512,24 @@ def run_shadow_cycle(
         shadow_mode=gates.shadow_mode,
         broker_routing_enabled=False,
         live_order_submission_enabled=False,
-        extras={"idempotency_key": key, "certification_status": cert_status},
+        extras={
+            "idempotency_key": key,
+            "certification_status": cert_status,
+            "original_inputs": {
+                "request": used.model_dump(mode="json"),
+                "decision": used_decision.model_dump(mode="json"),
+                "target": used_target.model_dump(mode="json"),
+                "account": used_account.model_dump(mode="json"),
+                "snapshot": used_snapshot.model_dump(mode="json"),
+            },
+        },
     )
     checkpoint = build_checkpoint(result, when=now)
     result = result.model_copy(
         update={"checkpoint": checkpoint, "scorecard": make_scorecard(result)}
     )
+    if not persist_result:
+        return result
     stored = put_result(result, key=key)
     write_checkpoint(stored)
     return stored
@@ -503,21 +539,36 @@ def replay_cycle(cycle_id: str = "last") -> ShadowResult:
     original = get_result(cycle_id) or last_result()
     if original is None:
         raise ShadowError("no shadow cycle to replay")
-    replayed = run_shadow_cycle(
-        ShadowRequest(
-            mode=original.cycle.mode,
-            decision_time=original.cycle.decision_time,
-            available_time=original.freshness.available_time,
-            data_timestamp=original.freshness.data_timestamp,
-            strategy_version=original.cycle.strategy_version,
-            execution_policy_id=original.config.execution_policy,
-            data_kind="synthetic",
-        ),
-        snapshot=seed_snapshot(),
-        account=seed_account()
-        if original.paper_account.account_id != SEED_SHADOW_ACCOUNT
-        else seed_shadow_account(),
-    )
+    inputs = original.extras.get("original_inputs")
+    if inputs is not None:
+        replayed = run_shadow_cycle(
+            ShadowRequest.model_validate(inputs["request"]),
+            decision=InvestmentDecision.model_validate(inputs["decision"]),
+            target=TargetPortfolio.model_validate(inputs["target"]),
+            account=PaperAccount.model_validate(inputs["account"]),
+            snapshot=PaperMarketSnapshot.model_validate(inputs["snapshot"]),
+            persist_result=False,
+        )
+    else:
+        from quantlab.data.policy import require_test_fixtures
+
+        require_test_fixtures("legacy shadow replay without original immutable input bundle")
+        replayed = run_shadow_cycle(
+            ShadowRequest(
+                mode=original.cycle.mode,
+                decision_time=original.cycle.decision_time,
+                available_time=original.freshness.available_time,
+                data_timestamp=original.freshness.data_timestamp,
+                strategy_version=original.cycle.strategy_version,
+                execution_policy_id=original.config.execution_policy,
+                data_kind="synthetic",
+            ),
+            snapshot=seed_snapshot(),
+            account=seed_account()
+            if original.paper_account.account_id != SEED_SHADOW_ACCOUNT
+            else seed_shadow_account(),
+            persist_result=False,
+        )
     match = (
         replayed.cycle.data_snapshot_hash == original.cycle.data_snapshot_hash
         and replayed.cycle.target_portfolio_hash == original.cycle.target_portfolio_hash

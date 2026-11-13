@@ -45,11 +45,15 @@ def score_agent(
     if as_of.tzinfo is None:
         raise ValueError("scorecard as_of must be timezone-aware")
     policy = (policy or default_calibration_policy()).verified()
+    if policy.created_at > as_of:
+        raise ValueError("future calibration policy is forbidden")
     frozen = tuple(item.verified() for item in outcomes)
     if not frozen:
         raise ValueError("at least one realized outcome is required")
-    if any(item.realized_at > as_of for item in frozen):
+    if any(item.realized_at > as_of or item.created_at > as_of for item in frozen):
         raise ValueError("future realized outcome is forbidden")
+    if len({item.outcome_id for item in frozen}) != len(frozen):
+        raise ValueError("duplicate outcome identity is forbidden")
     identities = {(item.agent_id, item.agent_version) for item in frozen}
     if len(identities) != 1:
         raise ValueError("a scorecard covers exactly one agent version")

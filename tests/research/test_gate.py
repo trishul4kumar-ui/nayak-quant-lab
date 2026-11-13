@@ -86,5 +86,46 @@ def test_clean_real_package_can_reach_candidate() -> None:
         multiple_testing_status=CheckResult.PASS,
         n_hypotheses=2,
         test_used_for_selection=False,
+        pit_evidence=CheckResult.PASS,
     )
     assert result.outcome is GateOutcome.RESEARCH_CANDIDATE
+
+
+def test_missing_pit_evidence_cannot_promote() -> None:
+    result = evaluate_research_gate(
+        integrity_failed=False,
+        next_bar_fill=True,
+        cost_bps=10.0,
+        data_kind="real",
+        walk_forward_windows=3,
+        oos_sharpe=0.1,
+        cost_still_positive_at_20bps=True,
+        parameter_fragile=False,
+        statistical_status=CheckResult.PASS,
+        multiple_testing_status=CheckResult.PASS,
+        n_hypotheses=2,
+        test_used_for_selection=False,
+    )
+    assert result.outcome is GateOutcome.WARN
+    assert any(reason.name == "pit_evidence" and reason.result is CheckResult.NOT_TESTED
+               for reason in result.reasons)
+
+
+def test_unknown_required_pit_evidence_cannot_promote() -> None:
+    result = evaluate_research_gate(
+        integrity_failed=False,
+        next_bar_fill=True,
+        cost_bps=10.0,
+        data_kind="real",
+        walk_forward_windows=3,
+        oos_sharpe=0.1,
+        cost_still_positive_at_20bps=True,
+        parameter_fragile=False,
+        statistical_status=CheckResult.PASS,
+        multiple_testing_status=CheckResult.PASS,
+        n_hypotheses=2,
+        test_used_for_selection=False,
+        pit_evidence=CheckResult.NOT_TESTED,
+    )
+    assert result.outcome is GateOutcome.WARN
+    assert any(reason.name == "pit_evidence" and reason.required for reason in result.reasons)

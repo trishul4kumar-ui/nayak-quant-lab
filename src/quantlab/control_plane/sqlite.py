@@ -118,7 +118,133 @@ class ControlPlaneSqlite:
             ).fetchone()
         return json.loads(str(row["payload_json"])) if row is not None else None
 
-    def list_latest(self, namespace: str) -> list[dict[str, Any]]:
+    def append_with_prior_records(
+        self,
+        *,
+        namespace: str,
+        identity: str,
+        payload: dict[str, Any],
+        payload_hash: str,
+        event: str,
+    ) -> list[dict[str, Any]]:
+        """Atomically append one immutable record and return its prior namespace records.
+
+        The returned rows include their matching audit fields so the caller can
+        verify domain-specific hashes and reject malformed history. The snapshot
+        and insert share the same SQLite write transaction across processes.
+        """
+        canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"))
+        now = datetime.now(tz=UTC).isoformat()
+        with self._transaction() as connection:
+            orphan = connection.execute(
+                """
+                SELECT 1 FROM control_plane_audit AS a
+                LEFT JOIN control_plane_records AS r
+                  ON r.namespace = a.namespace AND r.identity = a.identity
+                 AND r.revision = a.revision
+                WHERE a.namespace = ? AND r.identity IS NULL LIMIT 1
+                """,
+                (namespace,),
+            ).fetchone()
+            if orphan is not None:
+                raise ControlPlaneStoreError("control-plane audit has missing record")
+            rows = connection.execute(
+                """
+                SELECT r.identity, r.payload_json, r.payload_hash,
+                       a.event AS audit_event, a.payload_hash AS audit_hash
+                FROM control_plane_records AS r
+                LEFT JOIN control_plane_audit AS a
+                  ON r.namespace = a.namespace AND r.identity = a.identity
+                 AND r.revision = a.revision
+                WHERE r.namespace = ?
+                ORDER BY r.recorded_at, r.identity
+                """,
+                (namespace,),
+            ).fetchall()
+            if any(str(row["identity"]) == identity for row in rows):
+                raise ControlPlaneStoreError("immutable control-plane identity collision")
+            connection.execute(
+                """
+                INSERT INTO control_plane_records
+                (namespace, identity, revision, payload_hash, payload_json, recorded_at)
+                VALUES (?, ?, 1, ?, ?, ?)
+                """,
+                (namespace, identity, payload_hash, canonical, now),
+            )
+            connection.execute(
+                """
+                INSERT INTO control_plane_audit
+                (namespace, identity, revision, event, payload_hash, recorded_at)
+                VALUES (?, ?, 1, ?, ?, ?)
+                """,
+                (namespace, identity, event, payload_hash, now),
+            )
+        return [dict(row) for row in rows]
+
+    def record_and_prior_records(
+        self, namespace: str, identity: str
+    ) -> tuple[dict[str, Any] | None, list[dict[str, Any]]]:
+        """Read a record and the namespace records preceding its audit sequence."""
+        with self._transaction() as connection:
+            target = connection.execute(
+                """
+                SELECT r.identity, r.payload_json, r.payload_hash,
+                       a.audit_id, a.event AS audit_event, a.payload_hash AS audit_hash
+                FROM control_plane_records AS r
+                LEFT JOIN control_plane_audit AS a
+                  ON r.namespace = a.namespace AND r.identity = a.identity
+                 AND r.revision = a.revision
+                WHERE r.namespace = ? AND r.identity = ?
+                """,
+                (namespace, identity),
+            ).fetchall()
+            if not target:
+                orphan = connection.execute(
+                    "SELECT 1 FROM control_plane_audit WHERE namespace = ? AND identity = ?",
+                    (namespace, identity),
+                ).fetchone()
+                if orphan is not None:
+                    raise ControlPlaneStoreError("control-plane audit has missing record")
+                return None, []
+            if len(target) != 1 or target[0]["audit_id"] is None:
+                raise ControlPlaneStoreError("control-plane record audit is ambiguous")
+            audit_id = target[0]["audit_id"]
+            orphan = connection.execute(
+                """
+                SELECT 1 FROM control_plane_audit AS a
+                LEFT JOIN control_plane_records AS r
+                  ON r.namespace = a.namespace AND r.identity = a.identity
+                 AND r.revision = a.revision
+                WHERE a.namespace = ? AND a.audit_id < ? AND r.identity IS NULL LIMIT 1
+                """,
+                (namespace, audit_id),
+            ).fetchone()
+            if orphan is not None:
+                raise ControlPlaneStoreError("control-plane audit has missing prior record")
+            prior = connection.execute(
+                """
+                SELECT r.identity, r.payload_json, r.payload_hash,
+                       a.event AS audit_event, a.payload_hash AS audit_hash
+                FROM control_plane_records AS r
+                LEFT JOIN control_plane_audit AS a
+                  ON r.namespace = a.namespace AND r.identity = a.identity
+                 AND r.revision = a.revision
+                WHERE r.namespace = ? AND (a.audit_id < ? OR a.audit_id IS NULL)
+                ORDER BY a.audit_id
+                """,
+                (namespace, audit_id),
+            ).fetchall()
+        return dict(target[0]), [dict(row) for row in prior]
+
+    def list_latest(
+        self, namespace: str, *, payload_type: str | None = None
+    ) -> list[dict[str, Any]]:
+        type_filter = (
+            " AND json_extract(current.payload_json, '$.type') = ?" if payload_type else ""
+        )
+        parameters = (
+            (namespace, namespace, payload_type) if payload_type else (namespace, namespace)
+        )
         with self._lock:
             rows = self._connection.execute(
                 """
@@ -129,9 +255,11 @@ class ControlPlaneSqlite:
                     WHERE namespace = ? GROUP BY identity
                 ) AS latest
                 ON current.identity = latest.identity AND current.revision = latest.revision
-                WHERE current.namespace = ? ORDER BY current.recorded_at, current.identity
-                """,
-                (namespace, namespace),
+                WHERE current.namespace = ?
+                """
+                + type_filter
+                + " ORDER BY current.recorded_at, current.identity",
+                parameters,
             ).fetchall()
         return [json.loads(str(row["payload_json"])) for row in rows]
 

@@ -289,6 +289,7 @@ class MainWindow(QMainWindow):
         )
         self.ai_research = AiResearchPage(runtime)
         self.ai_quant_desk = AiQuantDeskPage(runtime)
+        self.ai_research.openDeskRequested.connect(self._open_nayak_desk)
         self.market = MarketPage(runtime)
         self.data = DataPage(runtime)
         self.backtest = BacktestPage(runtime, on_done=self._after_backtest)
@@ -480,6 +481,11 @@ class MainWindow(QMainWindow):
         self._apply_density_to_pages()
         self._refresh_context_strip()
         self._greeting_chip.setText(self._assistant.status_line())
+
+    def _open_nayak_desk(self) -> None:
+        self._set_experience_mode(ExperienceMode.FULL)
+        self._select_nav("ai_quant_desk")
+        self.ai_quant_desk.open_nayak()
 
     def _wire_catalog_empty_actions(self) -> None:
         for page in self._pages.values():

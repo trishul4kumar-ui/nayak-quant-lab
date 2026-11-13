@@ -56,3 +56,13 @@ A research experiment is an orchestration object. Discovery ≠ confirmation ≠
 Prompt 05 remains the only promotion gate. Synthetic families stay `WARN`. `LIVE_TRADING` remains false.
 
 Desktop **Research Control** is a `quantlab.app` query viewer. It does not run grids or fit models.
+
+The in-process orchestration registry stores defensive deep snapshots of research
+families, search spaces, hypotheses, experiment specifications and plans, and
+verifies their recorded hashes before returning copies. Legitimate hypothesis
+status changes go through its validated transition method. A changed plan with
+the same identity is rejected. These checks protect against accidental mutation
+and detectable in-process alteration; they are not an authenticated or durable
+preregistration archive, do not prove registration occurred before results were
+seen, and do not establish independent holdout evidence. Durable, timestamped
+family/selection records and complete trial accounting remain separate work.

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from quantlab.capital.definitions import TargetPortfolio
 from quantlab.core.config import LiveSafetyGates
 from quantlab.core.errors import SafetyError
 from quantlab.domain.research import CheckResult, IntegrityReport
@@ -73,6 +74,8 @@ def run_tca(
     request: TCARequest | None = None,
     *,
     paper: PaperOMSResult | None = None,
+    target: TargetPortfolio | None = None,
+    persist_result: bool = True,
     leaks: TCALeakFlags | None = None,
 ) -> TCAResult:
     used = request or TCARequest()
@@ -85,6 +88,18 @@ def run_tca(
     if used.kind is TCAKind.OBSERVED and flags.observed_vs_modelled_confusion:
         raise TCAError("observed_vs_modelled_confusion")
     paper_result = paper or _paper(used.oms_run_id)
+    from quantlab.data.policy import fixtures_enabled
+
+    if target is None:
+        if not fixtures_enabled():
+            raise TCAError("ORIGINAL_TARGET_REQUIRED: choose the target used by this paper run")
+        target = seed_target()
+    if target.decision_id != paper_result.decision_id:
+        raise TCAError("TARGET_PAPER_MISMATCH: target belongs to another decision")
+    if used.kind is TCAKind.OBSERVED and not fixtures_enabled():
+        raise TCAError(
+            "OBSERVED_EXECUTIONS_REQUIRED: simulated paper fills are not broker executions"
+        )
     key = idempotency_key(
         oms_run_id=paper_result.run.oms_run_id,
         kind=used.kind.value,
@@ -97,7 +112,7 @@ def run_tca(
             else used.liquidity_observation.model_dump(mode="json")
         ),
     )
-    cached = lookup(key)
+    cached = lookup(key) if persist_result else None
     if cached is not None:
         return cached
     unfilled = sum(
@@ -155,12 +170,17 @@ def run_tca(
         impact_k=None if calibration is None else calibration.estimate,
     )
     fragility = fragility_from(shortfall, capacity)
-    target_notional = sum(abs(v) for v in seed_target().notional_targets.values())
-    filled_notional = sum(item.gross_notional for item in paper_result.fills)
+    target_notional = sum(abs(v) for v in target.notional_targets.values())
+    filled_notional = sum(
+        item.filled_quantity * item.reference_price for item in paper_result.fills
+    )
     comparison = {
         "target_notional": target_notional,
         "filled_notional": filled_notional,
         "residual_notional": max(target_notional - filled_notional, 0.0),
+        "execution_notional_including_embedded_costs": sum(
+            item.gross_notional for item in paper_result.fills
+        ),
         "paper_shortfall": paper_result.tca.implementation_shortfall or 0.0,
         "tca_shortfall": shortfall.total or 0.0,
     }
@@ -199,4 +219,4 @@ def run_tca(
         result = result.model_copy(
             update={"note": "MODELLED_TCA. Do not report as realized/observed costs."}
         )
-    return put_result(result, key=key)
+    return put_result(result, key=key) if persist_result else result

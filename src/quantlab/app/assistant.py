@@ -107,7 +107,8 @@ class NayakAssistant:
                 title="Welcome to your private lab",
                 body=(
                     "I'm NAYAK — your quantitative research assistant. "
-                    "We'll start with synthetic NSE-style data. Nothing here places real trades."
+                    "Use the configured broker's real quotes and history. "
+                    "Missing data stops the job. Nothing here places real trades."
                 ),
                 action_label="Tour the lab",
                 action=FocusAction.ONBOARDING,
@@ -139,7 +140,8 @@ class NayakAssistant:
                 title="Read your first result",
                 body=(
                     f"Your last run ({last.name}) finished with Sharpe {sharpe_txt} "
-                    f"on synthetic data. {SYNTHETIC_SHARPE_DISCLAIMER}"
+                    f"on {last.data_kind or 'unknown'} data. "
+                    "Inspect provenance; completion does not establish profitability."
                 ),
                 action_label="Learn what Sharpe means",
                 action=FocusAction.LEARN_SHARPE,
@@ -165,7 +167,7 @@ class NayakAssistant:
             return FocusSuggestion(
                 title="Capture what you learned",
                 body=(
-                    f"Validation passed on synthetic data (Sharpe {sharpe_txt}). "
+                    f"Review the recorded validation status (Sharpe {sharpe_txt}). "
                     "Write one line in your journal — what surprised you?"
                 ),
                 action_label="Open journal",
@@ -201,7 +203,7 @@ class NayakAssistant:
 
         if "market" not in set(prefs.visited_pages):
             return FocusSuggestion(
-                title="Explore the synthetic market",
+                title="Explore the connected market",
                 body=(
                     f"Last run: {last.name} (Sharpe {sharpe_txt}). "
                     f"{SYNTHETIC_SHARPE_DISCLAIMER} "

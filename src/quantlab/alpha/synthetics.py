@@ -29,6 +29,9 @@ def _bar(
     volume: float,
     available: datetime | None = None,
 ) -> OHLCVBar:
+    from quantlab.data.policy import require_test_fixtures
+
+    require_test_fixtures("generated alpha prices/volumes")
     when = available or day
     pit = PointInTime(
         event_time=day,

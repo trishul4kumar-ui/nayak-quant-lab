@@ -137,6 +137,13 @@ def _finish(
 ) -> AllocationResult:
     status, extra = cap_synthetic(status, request.data_kind)
     warnings = [*warnings, *extra]
+    if liquidity is not LiquidityStatus.KNOWN and status in {
+        DecisionStatus.ELIGIBLE,
+        DecisionStatus.ALLOCATED,
+        DecisionStatus.PAPER_READY,
+    }:
+        status = DecisionStatus.RESEARCH_ONLY
+        warnings.append("unverified liquidity cannot support promotion")
     if request.data_kind == "synthetic" and status in {
         DecisionStatus.ELIGIBLE,
         DecisionStatus.ALLOCATED,
@@ -306,6 +313,7 @@ def allocate(
         request.gate,
         request.data_kind,
         allow_research_only_on_warn=used.constraint_policy.allow_research_only_on_warn,
+        require_gate=used.constraint_policy.require_gate,
     )
     if gate_code is AbstentionCode.GATE_FAIL:
         flags = flags.model_copy(update={"gate_bypass": False})
